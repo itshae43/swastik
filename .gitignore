@@ -1,0 +1,11 @@
+# Backend dependencies and build output
+Backend/node_modules/
+Backend/dist/
+
+# Local environment files
+Backend/.env
+*.env
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
