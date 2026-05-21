@@ -47,45 +47,37 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
       duration: const Duration(milliseconds: 2200),
     );
 
+    // Background fades in after a delay to match the "illustration come in motion"
     _bgOpacity = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(
         parent: _entranceController,
-        curve: const Interval(0.0, 0.35, curve: Curves.easeIn),
+        curve: const Interval(0.20, 0.55, curve: Curves.easeIn),
       ),
     );
 
     _bgScale = Tween<double>(begin: 1.14, end: 1.0).animate(
       CurvedAnimation(
         parent: _entranceController,
-        curve: const Interval(0.0, 0.75, curve: Curves.easeOutSine),
+        curve: const Interval(0.20, 0.80, curve: Curves.easeOutSine),
       ),
     );
 
-    _logoOpacity = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _entranceController,
-        curve: const Interval(0.15, 0.55, curve: Curves.easeOut),
-      ),
-    );
+    // Logo is fully visible from start to provide a seamless transition from native splash
+    _logoOpacity = Tween<double>(begin: 1.0, end: 1.0).animate(_entranceController);
+    _logoScale = Tween<double>(begin: 1.0, end: 1.0).animate(_entranceController);
 
-    _logoScale = Tween<double>(begin: 0.35, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _entranceController,
-        curve: const Interval(0.10, 0.60, curve: Curves.easeOutBack),
-      ),
-    );
-
+    // Text fades in below logo
     _textOpacity = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(
         parent: _entranceController,
-        curve: const Interval(0.50, 0.82, curve: Curves.easeOut),
+        curve: const Interval(0.40, 0.80, curve: Curves.easeOut),
       ),
     );
 
-    _textSlideY = Tween<double>(begin: 28.0, end: 0.0).animate(
+    _textSlideY = Tween<double>(begin: 20.0, end: 0.0).animate(
       CurvedAnimation(
         parent: _entranceController,
-        curve: const Interval(0.50, 0.82, curve: Curves.easeOut),
+        curve: const Interval(0.40, 0.80, curve: Curves.easeOut),
       ),
     );
 
@@ -233,97 +225,92 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     );
   }
 
-  /// Portrait layout: vertical Column with spacers
+  /// Portrait layout: Stack layout to keep logo perfectly centered
   Widget _buildPortraitLayout() {
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
+    return Stack(
+      alignment: Alignment.center,
       children: [
-        const Spacer(flex: 3),
-
-        // ── Glowing logo circle ──
-        Opacity(
-          opacity: _logoOpacity.value,
-          child: Transform.scale(
-            scale: _logoScale.value,
-            child: _GlowingLogo(
-              pulseGlow: _pulseGlow.value,
-              pulseRingAlpha: _pulseRingAlpha.value,
-              shimmerProgress: _shimmerProgress.value,
+        // ── Glowing logo circle (perfectly centered) ──
+        Align(
+          alignment: Alignment.center,
+          child: Opacity(
+            opacity: _logoOpacity.value,
+            child: Transform.scale(
+              scale: _logoScale.value,
+              child: _GlowingLogo(
+                pulseGlow: _pulseGlow.value,
+                pulseRingAlpha: _pulseRingAlpha.value,
+                shimmerProgress: _shimmerProgress.value,
+              ),
             ),
           ),
         ),
 
-        const SizedBox(height: 38),
-
         // ── Branding text ──
-        Opacity(
-          opacity: _textOpacity.value,
-          child: Transform.translate(
-            offset: Offset(0, _textSlideY.value),
-            child: const _BrandingText(),
+        Align(
+          alignment: const Alignment(0.0, 0.45),
+          child: Opacity(
+            opacity: _textOpacity.value,
+            child: Transform.translate(
+              offset: Offset(0, _textSlideY.value),
+              child: const _BrandingText(),
+            ),
           ),
         ),
 
-        const Spacer(flex: 2),
-
         // ── Bottom loader ──
-        Opacity(
-          opacity: _loaderOpacity.value,
-          child: const _BottomLoader(),
+        Align(
+          alignment: const Alignment(0.0, 0.85),
+          child: Opacity(
+            opacity: _loaderOpacity.value,
+            child: const _BottomLoader(),
+          ),
         ),
-
-        const SizedBox(height: 54),
       ],
     );
   }
 
-  /// Landscape layout: Logo and text centered, loader at bottom
+  /// Landscape layout: Logo centered, text to the right, loader at bottom
   Widget _buildLandscapeLayout() {
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
+    return Stack(
+      alignment: Alignment.center,
       children: [
-        const Spacer(flex: 2),
-
-        // ── Logo + Text grouped together in center ──
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            // ── Glowing logo circle ──
-            Opacity(
-              opacity: _logoOpacity.value,
-              child: Transform.scale(
-                scale: _logoScale.value,
-                child: _GlowingLogo(
-                  pulseGlow: _pulseGlow.value,
-                  pulseRingAlpha: _pulseRingAlpha.value,
-                  shimmerProgress: _shimmerProgress.value,
-                ),
+        // ── Glowing logo circle (perfectly centered) ──
+        Align(
+          alignment: Alignment.center,
+          child: Opacity(
+            opacity: _logoOpacity.value,
+            child: Transform.scale(
+              scale: _logoScale.value,
+              child: _GlowingLogo(
+                pulseGlow: _pulseGlow.value,
+                pulseRingAlpha: _pulseRingAlpha.value,
+                shimmerProgress: _shimmerProgress.value,
               ),
             ),
-
-            const SizedBox(width: 48),
-
-            // ── Branding text (beside logo in landscape) ──
-            Opacity(
-              opacity: _textOpacity.value,
-              child: Transform.translate(
-                offset: Offset(0, _textSlideY.value),
-                child: const _BrandingText(),
-              ),
-            ),
-          ],
+          ),
         ),
 
-        const Spacer(flex: 2),
+        // ── Branding text ──
+        Align(
+          alignment: const Alignment(0.55, 0.0),
+          child: Opacity(
+            opacity: _textOpacity.value,
+            child: Transform.translate(
+              offset: Offset(0, _textSlideY.value),
+              child: const _BrandingText(),
+            ),
+          ),
+        ),
 
         // ── Bottom loader ──
-        Opacity(
-          opacity: _loaderOpacity.value,
-          child: const _BottomLoader(),
+        Align(
+          alignment: const Alignment(0.0, 0.85),
+          child: Opacity(
+            opacity: _loaderOpacity.value,
+            child: const _BottomLoader(),
+          ),
         ),
-
-        const SizedBox(height: 32),
       ],
     );
   }

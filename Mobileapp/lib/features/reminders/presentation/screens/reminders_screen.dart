@@ -522,64 +522,67 @@ class _RemindersScreenState extends ConsumerState<RemindersScreen>
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(isTablet ? 16 : 12),
-        ),
-        title: Text(
-          'Edit Reminder',
-          style: GoogleFonts.montserrat(
-            fontWeight: FontWeight.bold,
-            fontSize: isTablet ? 21 : 18,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(isTablet ? 16 : 12),
           ),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: noteController,
-              style: GoogleFonts.montserrat(fontSize: isTablet ? 16 : 14),
-              decoration: InputDecoration(
-                labelText: 'Note',
-                labelStyle: GoogleFonts.montserrat(
-                  fontSize: isTablet ? 14 : 12,
-                ),
-              ),
-              maxLines: 3,
+          title: Text(
+            'Edit Reminder',
+            style: GoogleFonts.montserrat(
+              fontWeight: FontWeight.bold,
+              fontSize: isTablet ? 21 : 18,
             ),
-            SizedBox(height: isTablet ? 20 : 16),
-            ListTile(
-              title: Text(
-                'Date: ${DateFormat('dd MMM yyyy • hh:mm a').format(selectedDate)}',
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: noteController,
                 style: GoogleFonts.montserrat(fontSize: isTablet ? 16 : 14),
+                decoration: InputDecoration(
+                  labelText: 'Note',
+                  labelStyle: GoogleFonts.montserrat(
+                    fontSize: isTablet ? 14 : 12,
+                  ),
+                ),
+                maxLines: 3,
               ),
-              trailing: Icon(Icons.calendar_today, size: isTablet ? 22 : 20),
-              onTap: () async {
-                final date = await showDatePicker(
-                  context: context,
-                  initialDate: selectedDate,
-                  firstDate: DateTime.now(),
-                  lastDate: DateTime.now().add(const Duration(days: 365)),
-                );
-                if (date != null) {
-                  final time = await showTimePicker(
+              SizedBox(height: isTablet ? 20 : 16),
+              ListTile(
+                title: Text(
+                  'Date: ${DateFormat('dd MMM yyyy • hh:mm a').format(selectedDate)}',
+                  style: GoogleFonts.montserrat(fontSize: isTablet ? 16 : 14),
+                ),
+                trailing: Icon(Icons.calendar_today, size: isTablet ? 22 : 20),
+                onTap: () async {
+                  final date = await showDatePicker(
                     context: context,
-                    initialTime: TimeOfDay.fromDateTime(selectedDate),
+                    initialDate: selectedDate,
+                    firstDate: DateTime.now(),
+                    lastDate: DateTime.now().add(const Duration(days: 365)),
                   );
-                  if (time != null) {
-                    selectedDate = DateTime(
-                      date.year,
-                      date.month,
-                      date.day,
-                      time.hour,
-                      time.minute,
+                  if (date != null) {
+                    final time = await showTimePicker(
+                      context: context,
+                      initialTime: TimeOfDay.fromDateTime(selectedDate),
                     );
+                    if (time != null) {
+                      setState(() {
+                        selectedDate = DateTime(
+                          date.year,
+                          date.month,
+                          date.day,
+                          time.hour,
+                          time.minute,
+                        );
+                      });
+                    }
                   }
-                }
-              },
-            ),
-          ],
-        ),
+                },
+              ),
+            ],
+          ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -620,6 +623,7 @@ class _RemindersScreenState extends ConsumerState<RemindersScreen>
             ),
           ),
         ],
+      ),
       ),
     );
   }

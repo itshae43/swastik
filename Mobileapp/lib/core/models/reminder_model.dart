@@ -31,12 +31,12 @@ class ReminderModel {
       partyPhone: map['partyPhone'] as String? ?? '',
       title: map['title'] as String? ?? '',
       note: map['note'] as String? ?? '',
-      date: map['date'] != null ? DateTime.parse(map['date']) : DateTime.now(),
+      date: map['date'] != null ? DateTime.parse(map['date']).toLocal() : DateTime.now(),
       status: ReminderStatus.values.firstWhere(
         (e) => e.name == map['status'],
         orElse: () => ReminderStatus.upcoming,
       ),
-      createdAt: map['createdAt'] != null ? DateTime.parse(map['createdAt']) : DateTime.now(),
+      createdAt: map['createdAt'] != null ? DateTime.parse(map['createdAt']).toLocal() : DateTime.now(),
     );
   }
 
@@ -47,9 +47,9 @@ class ReminderModel {
       'partyPhone': partyPhone,
       'title': title,
       'note': note,
-      'date': date.toIso8601String(),
+      'date': date.toUtc().toIso8601String(),
       'status': status.name,
-      'createdAt': createdAt.toIso8601String(),
+      'createdAt': createdAt.toUtc().toIso8601String(),
     };
   }
 

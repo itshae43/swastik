@@ -1188,13 +1188,6 @@ class _PartyDetailScreenState extends ConsumerState<PartyDetailScreen> {
                 ),
                 const SizedBox(width: 12),
                 _buildActionIcon(
-                  icon: Icons.message_outlined,
-                  color: const Color(0xFF0288D1),
-                  onTap: () => CommunicationUtils.sendSMS(widget.party.phone),
-                  label: 'SMS',
-                ),
-                const SizedBox(width: 12),
-                _buildActionIcon(
                   icon: Icons.chat_outlined,
                   color: const Color(0xFF25D366),
                   onTap: () => CommunicationUtils.launchWhatsApp(widget.party.phone, reminder.note),
@@ -1272,53 +1265,57 @@ class _PartyDetailScreenState extends ConsumerState<PartyDetailScreen> {
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Edit Reminder', style: GoogleFonts.montserrat(fontWeight: FontWeight.bold)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: noteController,
-              decoration: const InputDecoration(labelText: 'Note'),
-              maxLines: 3,
-            ),
-            const SizedBox(height: 16),
-            ListTile(
-              title: Text('Date: ${DateFormat('dd MMM yyyy • hh:mm a').format(selectedDate)}'),
-              trailing: const Icon(Icons.calendar_today),
-              onTap: () async {
-                final date = await showDatePicker(
-                  context: context,
-                  initialDate: selectedDate,
-                  firstDate: DateTime.now(),
-                  lastDate: DateTime.now().add(const Duration(days: 365)),
-                );
-                if (date != null) {
-                  final time = await showTimePicker(
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: Text('Edit Reminder', style: GoogleFonts.montserrat(fontWeight: FontWeight.bold)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: noteController,
+                decoration: const InputDecoration(labelText: 'Note'),
+                maxLines: 3,
+              ),
+              const SizedBox(height: 16),
+              ListTile(
+                title: Text('Date: ${DateFormat('dd MMM yyyy • hh:mm a').format(selectedDate)}'),
+                trailing: const Icon(Icons.calendar_today),
+                onTap: () async {
+                  final date = await showDatePicker(
                     context: context,
-                    initialTime: TimeOfDay.fromDateTime(selectedDate),
+                    initialDate: selectedDate,
+                    firstDate: DateTime.now(),
+                    lastDate: DateTime.now().add(const Duration(days: 365)),
                   );
-                  if (time != null) {
-                    selectedDate = DateTime(date.year, date.month, date.day, time.hour, time.minute);
+                  if (date != null) {
+                    final time = await showTimePicker(
+                      context: context,
+                      initialTime: TimeOfDay.fromDateTime(selectedDate),
+                    );
+                    if (time != null) {
+                      setState(() {
+                        selectedDate = DateTime(date.year, date.month, date.day, time.hour, time.minute);
+                      });
+                    }
                   }
-                }
+                },
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+            ElevatedButton(
+              onPressed: () {
+                ref.read(reminderNotifierProvider.notifier).updateReminder(
+                  reminder.copyWith(note: noteController.text, date: selectedDate),
+                );
+                Navigator.pop(context);
               },
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF4A3E1F)),
+              child: const Text('Save', style: TextStyle(color: Colors.white)),
             ),
           ],
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-          ElevatedButton(
-            onPressed: () {
-              ref.read(reminderNotifierProvider.notifier).updateReminder(
-                reminder.copyWith(note: noteController.text, date: selectedDate),
-              );
-              Navigator.pop(context);
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF4A3E1F)),
-            child: const Text('Save', style: TextStyle(color: Colors.white)),
-          ),
-        ],
       ),
     );
   }
