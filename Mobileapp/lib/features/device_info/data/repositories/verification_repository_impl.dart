@@ -13,9 +13,12 @@ class VerificationRepositoryImpl implements VerificationRepository {
   Future<Map<String, dynamic>> verifyDevice(DeviceInfo deviceInfo) async {
     // 10.0.2.2 is the gateway to host machine localhost in Android emulators
     // localhost is used for iOS, web, desktop, and unit testing
+    
+    const String baseUrl =
+        'https://f07e-2405-201-402a-504a-357d-57f8-fb4d-ceae.ngrok-free.app';
+
     final urls = [
-      'http://10.0.2.2:5000/api/verify',
-      'http://localhost:5000/api/verify',
+      '$baseUrl/api/verify',
     ];
 
     Map<String, String> body = {

@@ -19,13 +19,7 @@ app.use(express.json());
 
 // In-Memory/Local Admin records as fallback if MongoDB is not connected
 let isMongoConnected = false;
-const fallbackAdmins = [
-  {
-    brand: 'google',
-    model: 'Pixel Tablet',
-    androidId: 'd0b41708a4f50758',
-  }
-];
+let fallbackAdmins: any[] = [];
 
 // Connect to MongoDB
 mongoose
@@ -33,7 +27,7 @@ mongoose
   .then(async () => {
     console.log('Connected to MongoDB successfully');
     isMongoConnected = true;
-    await seedAdmin();
+    console.log('Admin seeding on startup is disabled.');
   })
   .catch((err) => {
     console.error('================================================================');
@@ -44,7 +38,7 @@ mongoose
     isMongoConnected = false;
   });
 
-// Seed default Admin user if none exists
+// Seed default Admin user if none exists (disabled)
 async function seedAdmin() {
   try {
     const adminCount = await Admin.countDocuments();
@@ -92,7 +86,21 @@ app.post('/api/verify', async (req: Request, res: Response) => {
     console.log(`[VERIFICATION REQUEST] brand=${brand}, model=${model}, androidId=${androidId}`);
 
     if (isMongoConnected) {
-      // Query database for matching brand and androidId (case-insensitive for brand and model)
+      // Check if any admins exist in MongoDB
+      const adminCount = await Admin.countDocuments();
+      if (adminCount === 0) {
+        console.log('No admins found in database. Registering this device as the admin...');
+        const newAdmin = new Admin({
+          brand,
+          model: model || 'Unknown Model',
+          androidId,
+        });
+        await newAdmin.save();
+        console.log('First admin registered successfully:', newAdmin);
+        return res.json({ verified: true, admin: newAdmin });
+      }
+
+      // Query database for matching brand and androidId (case-insensitive for brand)
       const matchingAdmin = await Admin.findOne({
         androidId: { $regex: new RegExp(`^${androidId}$`, 'i') },
         brand: { $regex: new RegExp(`^${brand}$`, 'i') },
@@ -103,6 +111,19 @@ app.post('/api/verify', async (req: Request, res: Response) => {
         return res.json({ verified: true, admin: matchingAdmin });
       }
     } else {
+      // In-memory fallback
+      if (fallbackAdmins.length === 0) {
+        console.log('No admins found in-memory. Registering this device as the admin...');
+        const newAdmin = {
+          brand,
+          model: model || 'Unknown Model',
+          androidId,
+        };
+        fallbackAdmins.push(newAdmin);
+        console.log('First fallback admin registered successfully:', newAdmin);
+        return res.json({ verified: true, admin: newAdmin });
+      }
+
       // Query local fallback memory database
       const match = fallbackAdmins.find(
         (admin) =>
