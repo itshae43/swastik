@@ -1,31 +1,51 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:swastik_mobile_app/features/device_info/presentation/pages/verification_page.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:swastik_mobile_app/core/utils/responsive_utils.dart';
+import 'features/auth/presentation/screens/splash_screen.dart';
+import 'items_widget.dart';
 
 void main() {
-  runApp(
-    // ProviderScope stores the state of all providers in our Riverpod application
-    const ProviderScope(child: MyApp()),
-  );
+  WidgetsFlutterBinding.ensureInitialized();
+  runApp(const ProviderScope(child: SwarnKhataApp()));
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+class SwarnKhataApp extends StatelessWidget {
+  const SwarnKhataApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Swastik Clean Arch App',
+      title: 'Swastik',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF8F00FF),
-          brightness: Brightness.dark,
-        ),
+        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFFD4B13B)),
         useMaterial3: true,
-        fontFamily: 'Roboto', // Premium systems font
+        scaffoldBackgroundColor: const Color(0xFFFFF8F0),
+        textTheme: GoogleFonts.montserratTextTheme(),
       ),
-      home: const VerificationPage(),
+      builder: (context, child) {
+        final mediaQuery = MediaQuery.of(context);
+        final isTablet = AppResponsive.isTablet(context);
+        final textScale = AppResponsive.tabletTextScale(context);
+        final appChild = child ?? const SizedBox.shrink();
+
+        return MediaQuery(
+          data: isTablet
+              ? mediaQuery.copyWith(textScaler: TextScaler.linear(textScale))
+              : mediaQuery,
+          child: Theme(
+            data: Theme.of(context).copyWith(
+              visualDensity: AppResponsive.visualDensity(context),
+              materialTapTargetSize: isTablet
+                  ? MaterialTapTargetSize.shrinkWrap
+                  : MaterialTapTargetSize.padded,
+            ),
+            child: appChild,
+          ),
+        );
+      },
+      home: const SplashScreen(),
     );
   }
 }

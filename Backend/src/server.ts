@@ -4,6 +4,9 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import dns from 'dns';
 import { Admin } from './models/Admin';
+import { Party } from './models/Party';
+import { Transaction } from './models/Transaction';
+import { Reminder } from './models/Reminder';
 
 // Force use of reliable public DNS to prevent SRV ETIMEOUT on some networks
 dns.setServers(['8.8.8.8', '1.1.1.1']);
@@ -148,6 +151,111 @@ app.post('/api/verify', async (req: Request, res: Response) => {
       verified: false,
       message: 'Server error during verification.',
     });
+  }
+});
+
+// CRUD Routes for Parties
+app.get('/api/parties', async (req, res) => {
+  try {
+    const parties = await Party.find().sort({ updatedAt: -1 });
+    res.json(parties);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+app.post('/api/parties', async (req, res) => {
+  try {
+    const newParty = new Party(req.body);
+    const savedParty = await newParty.save();
+    res.status(201).json(savedParty);
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+app.put('/api/parties/:id', async (req, res) => {
+  try {
+    const updatedParty = await Party.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    res.json(updatedParty);
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+app.delete('/api/parties/:id', async (req, res) => {
+  try {
+    await Party.findByIdAndDelete(req.params.id);
+    res.json({ message: 'Party deleted successfully' });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// CRUD Routes for Transactions
+app.get('/api/transactions', async (req, res) => {
+  try {
+    const transactions = await Transaction.find().sort({ date: -1 });
+    res.json(transactions);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+app.post('/api/transactions', async (req, res) => {
+  try {
+    const newTx = new Transaction(req.body);
+    const savedTx = await newTx.save();
+    res.status(201).json(savedTx);
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+app.put('/api/transactions/:id', async (req, res) => {
+  try {
+    const updatedTx = await Transaction.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    res.json(updatedTx);
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+app.delete('/api/transactions/:id', async (req, res) => {
+  try {
+    await Transaction.findByIdAndDelete(req.params.id);
+    res.json({ message: 'Transaction deleted successfully' });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// CRUD Routes for Reminders
+app.get('/api/reminders', async (req, res) => {
+  try {
+    const reminders = await Reminder.find().sort({ date: 1 });
+    res.json(reminders);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+app.post('/api/reminders', async (req, res) => {
+  try {
+    const newReminder = new Reminder(req.body);
+    const savedReminder = await newReminder.save();
+    res.status(201).json(savedReminder);
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+app.put('/api/reminders/:id', async (req, res) => {
+  try {
+    const updatedReminder = await Reminder.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    res.json(updatedReminder);
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+app.delete('/api/reminders/:id', async (req, res) => {
+  try {
+    await Reminder.findByIdAndDelete(req.params.id);
+    res.json({ message: 'Reminder deleted successfully' });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
   }
 });
 
