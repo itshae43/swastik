@@ -10,12 +10,9 @@ class ApiConfig {
 
   /// Base URL dynamically switching between local backend (in debug) and production.
   static String get baseUrl {
-    if (kDebugMode) {
-      if (kIsWeb) {
-        return 'http://localhost:5000';
-      }
-      return Platform.isAndroid ? 'http://10.0.2.2:5000' : 'http://localhost:5000';
-    }
+    // To test with a local backend on your PC, uncomment the line below:
+    // if (kDebugMode) return 'http://192.168.29.24:5000';
+
     return 'https://appapi.swastikjewel.in';
   }
 }
