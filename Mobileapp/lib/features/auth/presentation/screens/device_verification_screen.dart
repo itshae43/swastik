@@ -14,14 +14,63 @@ class DeviceVerificationScreen extends ConsumerStatefulWidget {
 }
 
 class _DeviceVerificationScreenState
-    extends ConsumerState<DeviceVerificationScreen> {
+    extends ConsumerState<DeviceVerificationScreen>
+    with SingleTickerProviderStateMixin {
   bool _isAdminTab = true;
   UserProfileModel? _selectedProfile;
+  late AnimationController _warningController;
+  bool _showWarning = false;
+  bool _isVerificationTriggeredByClick = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _warningController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 10),
+    );
+    _warningController.addStatusListener((status) {
+      if (status == AnimationStatus.dismissed) {
+        if (mounted) {
+          setState(() {
+            _showWarning = false;
+          });
+        }
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _warningController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authStateProvider);
     final profilesState = ref.watch(userProfilesNotifierProvider);
+
+    ref.listen<AuthStatus>(authStateProvider, (previous, next) {
+      if (next == AuthStatus.unverified || next == AuthStatus.error) {
+        if (mounted) {
+          if (_isVerificationTriggeredByClick) {
+            setState(() {
+              _showWarning = true;
+            });
+            _warningController.reverse(from: 1.0);
+            _isVerificationTriggeredByClick = false;
+          }
+        }
+      } else if (next == AuthStatus.loading) {
+        if (mounted) {
+          setState(() {
+            _showWarning = false;
+          });
+          _warningController.stop();
+        }
+      }
+    });
 
     return Scaffold(
       backgroundColor: const Color(0xFFFFF8F0),
@@ -74,7 +123,7 @@ class _DeviceVerificationScreenState
         border: Border.all(color: const Color(0xFFD4B13B), width: 1.5),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFFD4B13B).withOpacity(0.12),
+            color: const Color(0xFFD4B13B).withValues(alpha: 0.12),
             blurRadius: 16,
             spreadRadius: 2,
           ),
@@ -119,7 +168,10 @@ class _DeviceVerificationScreenState
                 setState(() {
                   _isAdminTab = true;
                   _selectedProfile = null;
+                  _showWarning = false;
+                  _isVerificationTriggeredByClick = false;
                 });
+                _warningController.stop();
               },
             ),
           ),
@@ -132,7 +184,10 @@ class _DeviceVerificationScreenState
                 setState(() {
                   _isAdminTab = false;
                   _selectedProfile = null;
+                  _showWarning = false;
+                  _isVerificationTriggeredByClick = false;
                 });
+                _warningController.stop();
               },
             ),
           ),
@@ -157,7 +212,7 @@ class _DeviceVerificationScreenState
           boxShadow: isActive
               ? [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.06),
+                    color: Colors.black.withValues(alpha: 0.06),
                     blurRadius: 8,
                     offset: const Offset(0, 2),
                   ),
@@ -202,6 +257,9 @@ class _DeviceVerificationScreenState
             onPressed: isLoading
                 ? null
                 : () {
+                    setState(() {
+                      _isVerificationTriggeredByClick = true;
+                    });
                     ref.read(authStateProvider.notifier).verify();
                   },
             style: ElevatedButton.styleFrom(
@@ -230,20 +288,124 @@ class _DeviceVerificationScreenState
                   ),
           ),
         ),
-        if (authState == AuthStatus.unverified ||
-            authState == AuthStatus.error) ...[
-          const SizedBox(height: 36),
-          Text(
-            'Unauthorized Device',
-            style: GoogleFonts.montserrat(
-              color: const Color(0xFFD32F2F),
-              fontSize: 15,
-              fontWeight: FontWeight.bold,
-            ),
-            textAlign: TextAlign.center,
-          ),
-        ],
+        _buildWarningCard(),
       ],
+    );
+  }
+
+  // ─── WARNING CARD ──────────────────────────────────────────────────────────
+  Widget _buildWarningCard() {
+    return AnimatedSize(
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOut,
+      child: _showWarning
+          ? AnimatedBuilder(
+              animation: _warningController,
+              builder: (context, child) {
+                return Container(
+                  margin: const EdgeInsets.only(top: 28),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFF2F2), // Premium light red
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: const Color(0xFFF8D7DA),
+                      width: 1,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFFD32F2F).withValues(alpha: 0.04),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: Column(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 16, 12, 16),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFFCDAD7),
+                                shape: BoxShape.circle,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: const Color(0xFFD32F2F).withValues(alpha: 0.1),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                              child: const Icon(
+                                Icons.gpp_bad_rounded,
+                                color: Color(0xFFC62828),
+                                size: 24,
+                              ),
+                            ),
+                            const SizedBox(width: 14),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Unauthorized Device',
+                                    style: GoogleFonts.montserrat(
+                                      color: const Color(0xFFC62828),
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    'This device is not registered. Please contact your Admin.',
+                                    style: GoogleFonts.montserrat(
+                                      color: const Color(0xFF7A1C1C),
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w500,
+                                      height: 1.4,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            IconButton(
+                              onPressed: () {
+                                setState(() {
+                                  _showWarning = false;
+                                  _isVerificationTriggeredByClick = false;
+                                });
+                                _warningController.stop();
+                              },
+                              icon: const Icon(
+                                Icons.close_rounded,
+                                color: Color(0xFFC62828),
+                                size: 20,
+                              ),
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(),
+                              splashRadius: 16,
+                            ),
+                          ],
+                        ),
+                      ),
+                      LinearProgressIndicator(
+                        value: _warningController.value,
+                        backgroundColor: const Color(0xFFFCDAD7),
+                        valueColor: const AlwaysStoppedAnimation<Color>(
+                          Color(0xFFE53935),
+                        ),
+                        minHeight: 3.5,
+                      ),
+                    ],
+                  ),
+                );
+              },
+            )
+          : const SizedBox.shrink(),
     );
   }
 
@@ -296,7 +458,7 @@ class _DeviceVerificationScreenState
         border: Border.all(color: Colors.grey[200]!),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.02),
+            color: Colors.black.withValues(alpha: 0.02),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -598,7 +760,7 @@ class _DeviceVerificationScreenState
             border: Border.all(color: Colors.grey[200]!),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.02),
+                color: Colors.black.withValues(alpha: 0.02),
                 blurRadius: 10,
                 offset: const Offset(0, 4),
               ),
