@@ -7,6 +7,7 @@ import { Admin } from './models/Admin';
 import { Party } from './models/Party';
 import { Transaction } from './models/Transaction';
 import { Reminder } from './models/Reminder';
+import { UserProfile } from './models/UserProfile';
 
 // Force use of reliable public DNS to prevent SRV ETIMEOUT on some networks
 dns.setServers(['8.8.8.8', '1.1.1.1']);
@@ -24,6 +25,27 @@ app.use(express.json());
 let isMongoConnected = false;
 let fallbackAdmins: any[] = [];
 
+// In-Memory/Local UserProfile records as fallback if MongoDB is not connected
+let fallbackUserProfiles: any[] = [
+  {
+    _id: '60d5ec4b86cd5d3a9c7b99c1',
+    name: 'Shailendra',
+    mobile: '9876543210',
+    status: 'inactive',
+    sessionActive: false,
+    requestPending: false,
+    requestedAt: null,
+    lastApprovalTime: null,
+    approvedBy: null,
+    deviceInfo: {
+      deviceModel: 'Pixel 6',
+      platform: 'android'
+    },
+    createdAt: new Date(),
+    updatedAt: new Date()
+  }
+];
+
 // Connect to MongoDB
 mongoose
   .connect(MONGO_URI)
@@ -31,6 +53,7 @@ mongoose
     console.log('Connected to MongoDB successfully');
     isMongoConnected = true;
     console.log('Admin seeding on startup is disabled.');
+    seedUserProfile();
   })
   .catch((err) => {
     console.error('================================================================');
@@ -40,6 +63,35 @@ mongoose
     console.error('================================================================');
     isMongoConnected = false;
   });
+
+// Seed default UserProfile if none exists
+async function seedUserProfile() {
+  try {
+    if (!isMongoConnected) return;
+    const profileCount = await UserProfile.countDocuments();
+    if (profileCount === 0) {
+      console.log('No user profiles found in database. Seeding default profile...');
+      const defaultProfile = new UserProfile({
+        name: 'Shailendra',
+        mobile: '9876543210',
+        status: 'inactive',
+        sessionActive: false,
+        requestPending: false,
+        requestedAt: null,
+        lastApprovalTime: null,
+        approvedBy: null,
+        deviceInfo: {
+          deviceModel: '',
+          platform: '',
+        },
+      });
+      await defaultProfile.save();
+      console.log('Default user profile seeded successfully:', defaultProfile);
+    }
+  } catch (error) {
+    console.error('Error seeding user profile:', error);
+  }
+}
 
 // Seed default Admin user if none exists (disabled)
 async function seedAdmin() {
@@ -74,6 +126,73 @@ async function seedAdmin() {
   }
 }
 
+// Mock Device Sessions
+interface IDeviceSession {
+  id: string;
+  userName: string;
+  phoneNumber: string;
+  brand: string;
+  model: string;
+  androidId: string;
+  lastActive: string;
+}
+
+let mockDeviceSessions: IDeviceSession[] = [
+  {
+    id: "session_1",
+    userName: "Swastik Jewels Admin",
+    phoneNumber: "+91 98765 43210",
+    brand: "Google",
+    model: "Pixel Tablet",
+    androidId: "d0b41708a4f50758",
+    lastActive: "Active Now"
+  },
+  {
+    id: "session_2",
+    userName: "Manager",
+    phoneNumber: "+91 99999 88888",
+    brand: "Samsung",
+    model: "Galaxy Tab S9 Ultra",
+    androidId: "mock_android_id_2",
+    lastActive: "Active 5 mins ago"
+  },
+  {
+    id: "session_3",
+    userName: "Sales Representative",
+    phoneNumber: "+91 88888 77777",
+    brand: "OnePlus",
+    model: "OnePlus 11 5G",
+    androidId: "mock_android_id_3",
+    lastActive: "Active 2 hours ago"
+  }
+];
+
+// Helper to track/upsert dynamic device sessions
+const registerDeviceSession = (brand: string, model: string, androidId: string) => {
+  const exists = mockDeviceSessions.some(
+    (session) => session.androidId.toLowerCase() === androidId.toLowerCase()
+  );
+  if (!exists) {
+    mockDeviceSessions.push({
+      id: `session_${Date.now()}`,
+      userName: "Swastik Jewels Admin",
+      phoneNumber: "+91 98765 43210",
+      brand,
+      model: model || "Unknown Model",
+      androidId,
+      lastActive: "Active Now"
+    });
+  } else {
+    // Update active state of existing device
+    mockDeviceSessions = mockDeviceSessions.map((session) => {
+      if (session.androidId.toLowerCase() === androidId.toLowerCase()) {
+        return { ...session, lastActive: "Active Now" };
+      }
+      return session;
+    });
+  }
+};
+
 // Verification Endpoint
 app.post('/api/verify', async (req: Request, res: Response) => {
   try {
@@ -100,6 +219,7 @@ app.post('/api/verify', async (req: Request, res: Response) => {
         });
         await newAdmin.save();
         console.log('First admin registered successfully:', newAdmin);
+        registerDeviceSession(brand, model || 'Unknown Model', androidId);
         return res.json({ verified: true, admin: newAdmin });
       }
 
@@ -111,6 +231,7 @@ app.post('/api/verify', async (req: Request, res: Response) => {
 
       if (matchingAdmin) {
         console.log('Verification Success (MongoDB): Match found.');
+        registerDeviceSession(brand, model || 'Unknown Model', androidId);
         return res.json({ verified: true, admin: matchingAdmin });
       }
     } else {
@@ -124,6 +245,7 @@ app.post('/api/verify', async (req: Request, res: Response) => {
         };
         fallbackAdmins.push(newAdmin);
         console.log('First fallback admin registered successfully:', newAdmin);
+        registerDeviceSession(brand, model || 'Unknown Model', androidId);
         return res.json({ verified: true, admin: newAdmin });
       }
 
@@ -136,6 +258,7 @@ app.post('/api/verify', async (req: Request, res: Response) => {
 
       if (match) {
         console.log('Verification Success (In-Memory Fallback): Match found.');
+        registerDeviceSession(brand, model || 'Unknown Model', androidId);
         return res.json({ verified: true, admin: match });
       }
     }
@@ -151,6 +274,167 @@ app.post('/api/verify', async (req: Request, res: Response) => {
       verified: false,
       message: 'Server error during verification.',
     });
+  }
+});
+
+// Device Management Endpoints
+app.get('/api/devices', (req: Request, res: Response) => {
+  try {
+    res.json(mockDeviceSessions);
+  } catch (error: any) {
+    console.error('Error in GET /api/devices:', error);
+    res.status(500).json({ error: 'Server error retrieving device sessions.' });
+  }
+});
+
+app.delete('/api/devices/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const sessionIndex = mockDeviceSessions.findIndex((s) => s.id === id);
+
+    if (sessionIndex === -1) {
+      return res.status(404).json({ error: 'Device session not found.' });
+    }
+
+    const session = mockDeviceSessions[sessionIndex];
+    const androidId = session.androidId;
+
+    // Delete session from list
+    mockDeviceSessions.splice(sessionIndex, 1);
+
+    // Also deauthorize/delete from Admin collection to trigger real logout on that device
+    if (isMongoConnected) {
+      const deletedAdmin = await Admin.findOneAndDelete({
+        androidId: { $regex: new RegExp(`^${androidId}$`, 'i') },
+      });
+      console.log(`Deauthorized admin device ${androidId} via session deletion:`, deletedAdmin);
+    } else {
+      const initialLength = fallbackAdmins.length;
+      fallbackAdmins = fallbackAdmins.filter(
+        (admin) => admin.androidId.toLowerCase() !== androidId.toLowerCase()
+      );
+      console.log(
+        `Deauthorized fallback admin device ${androidId} via session deletion. Count reduced by ${
+          initialLength - fallbackAdmins.length
+        }`
+      );
+    }
+
+    res.json({ success: true, message: 'Device logged out successfully.' });
+  } catch (error: any) {
+    console.error('Error in DELETE /api/devices/:id:', error);
+    res.status(500).json({ error: 'Server error deleting device session.' });
+  }
+});
+
+// CRUD/API endpoints for User Profiles
+app.get('/api/user-profiles', async (req: Request, res: Response) => {
+  try {
+    if (isMongoConnected) {
+      const profiles = await UserProfile.find().sort({ createdAt: -1 });
+      res.json(profiles);
+    } else {
+      res.json(fallbackUserProfiles);
+    }
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/user-profiles', async (req: Request, res: Response) => {
+  try {
+    const { name, mobile, deviceInfo } = req.body;
+    if (!name || !mobile) {
+      return res.status(400).json({ error: 'Name and mobile number are required.' });
+    }
+
+    if (isMongoConnected) {
+      const newProfile = new UserProfile({
+        name,
+        mobile,
+        status: 'inactive',
+        sessionActive: false,
+        requestPending: false,
+        requestedAt: null,
+        lastApprovalTime: null,
+        approvedBy: null,
+        deviceInfo: {
+          deviceModel: deviceInfo?.deviceModel || '',
+          platform: deviceInfo?.platform || '',
+        },
+      });
+      const savedProfile = await newProfile.save();
+      res.status(201).json(savedProfile);
+    } else {
+      const newProfile = {
+        _id: `mock_profile_${Date.now()}`,
+        name,
+        mobile,
+        status: 'inactive',
+        sessionActive: false,
+        requestPending: false,
+        requestedAt: null,
+        lastApprovalTime: null,
+        approvedBy: null,
+        deviceInfo: {
+          deviceModel: deviceInfo?.deviceModel || '',
+          platform: deviceInfo?.platform || '',
+        },
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      fallbackUserProfiles.push(newProfile);
+      res.status(201).json(newProfile);
+    }
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.post('/api/user-profiles/:id/request-access', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { deviceInfo } = req.body;
+
+    if (isMongoConnected) {
+      const updated = await UserProfile.findByIdAndUpdate(
+        id,
+        {
+          status: 'pending_approval',
+          requestPending: true,
+          requestedAt: new Date(),
+          ...(deviceInfo && {
+            deviceInfo: {
+              deviceModel: deviceInfo.deviceModel || '',
+              platform: deviceInfo.platform || '',
+            },
+          }),
+        },
+        { new: true }
+      );
+      if (!updated) {
+        return res.status(404).json({ error: 'User profile not found.' });
+      }
+      res.json(updated);
+    } else {
+      const profile = fallbackUserProfiles.find((p) => p._id === id);
+      if (!profile) {
+        return res.status(404).json({ error: 'User profile not found.' });
+      }
+      profile.status = 'pending_approval';
+      profile.requestPending = true;
+      profile.requestedAt = new Date();
+      if (deviceInfo) {
+        profile.deviceInfo = {
+          deviceModel: deviceInfo.deviceModel || '',
+          platform: deviceInfo.platform || '',
+        };
+      }
+      profile.updatedAt = new Date();
+      res.json(profile);
+    }
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
   }
 });
 

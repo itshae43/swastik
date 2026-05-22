@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:swastik_mobile_app/core/utils/responsive_utils.dart';
 import 'package:swastik_mobile_app/features/auth/providers/auth_providers.dart';
+import 'device_management_screen.dart';
+
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -53,9 +55,15 @@ class SettingsScreen extends ConsumerWidget {
                 isTablet: isTablet,
               ),
               _buildSettingsTile(
-                icon: Icons.lock_outline_rounded,
-                label: 'Change Password',
-                onTap: () {},
+                icon: Icons.devices_rounded,
+                label: 'Device Management',
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (context) => const DeviceManagementScreen(),
+                    ),
+                  );
+                },
                 isTablet: isTablet,
               ),
               _buildSettingsTile(
