@@ -13,6 +13,6 @@ class ApiConfig {
     if (kDebugMode) {
       return 'https://campus-upstate-monday.ngrok-free.dev';
       }
-    return 'https://appapi.swastikjewel.in';
+    return 'http://appapi.swastikjewel.in';
   }
 }
