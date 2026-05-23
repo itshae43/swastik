@@ -9,7 +9,8 @@ import 'package:swastik_mobile_app/features/auth/models/user_profile.dart';
 import 'package:swastik_mobile_app/features/auth/providers/user_profiles_provider.dart';
 
 class DeviceManagementScreen extends ConsumerStatefulWidget {
-  const DeviceManagementScreen({super.key});
+  final int initialTabIndex;
+  const DeviceManagementScreen({super.key, this.initialTabIndex = 0});
 
   @override
   ConsumerState<DeviceManagementScreen> createState() => _DeviceManagementScreenState();
@@ -23,6 +24,7 @@ class _DeviceManagementScreenState extends ConsumerState<DeviceManagementScreen>
   @override
   void initState() {
     super.initState();
+    _activeTabIndex = widget.initialTabIndex;
     _loadCurrentDeviceId();
   }
 
@@ -368,7 +370,12 @@ class _DeviceManagementScreenState extends ConsumerState<DeviceManagementScreen>
                           color: const Color(0xFFD4B13B),
                           child: () {
                             final pendingProfiles = profilesState.profiles
-                                .where((p) => p.status == 'pending_approval' || p.requestPending == true)
+                                .where((p) {
+                                  final isPending = p.status == 'pending_approval' || p.requestPending == true;
+                                  if (!isPending) return false;
+                                  final diff = DateTime.now().difference(p.requestedAt ?? p.createdAt ?? DateTime.now());
+                                  return diff.inMinutes < 5;
+                                })
                                 .toList();
                             if (pendingProfiles.isEmpty) {
                               return _buildEmptyPendingRequestsState(isTablet);
@@ -732,12 +739,13 @@ class _PendingRequestItemState extends State<_PendingRequestItem> {
   }
 
   void _calculateRemaining() {
-    final requestedAt = widget.profile.requestedAt;
+    final requestedAt = widget.profile.requestedAt ?? widget.profile.createdAt;
+    final totalSeconds = 5 * 60; // 5 minutes
     if (requestedAt != null) {
       final diff = DateTime.now().difference(requestedAt).inSeconds;
-      _remainingSeconds = (30 - diff).clamp(0, 30);
+      _remainingSeconds = (totalSeconds - diff).clamp(0, totalSeconds);
     } else {
-      _remainingSeconds = 30;
+      _remainingSeconds = totalSeconds;
     }
   }
 
@@ -783,7 +791,7 @@ class _PendingRequestItemState extends State<_PendingRequestItem> {
   @override
   Widget build(BuildContext context) {
     final isTablet = widget.isTablet;
-    final isUrgent = _remainingSeconds <= 10;
+    final isUrgent = _remainingSeconds <= 30;
     final avatarColor = isUrgent ? const Color(0xFFFFF2F2) : const Color(0xFFFAF6EE);
     final avatarIconColor = isUrgent ? const Color(0xFFD32F2F) : const Color(0xFF8A7311);
 

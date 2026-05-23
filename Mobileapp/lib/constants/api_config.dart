@@ -11,7 +11,7 @@ class ApiConfig {
   /// Base URL dynamically switching between local backend (in debug) and production.
   static String get baseUrl {
     if (kDebugMode) {
-      return 'https://694d-116-74-8-20.ngrok-free.app';
+      return 'https://campus-upstate-monday.ngrok-free.dev';
       }
     return 'https://appapi.swastikjewel.in';
   }

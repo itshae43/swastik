@@ -943,8 +943,8 @@ class _EntriesScreenState extends ConsumerState<EntriesScreen> {
                             );
 
                         if (success && mounted) {
-                          // Switch to ledger screen
-                          ref.read(navigationProvider.notifier).setIndex(2);
+                          // Switch to ledger screen on tablet, home screen on mobile
+                          ref.read(navigationProvider.notifier).setIndex(isTablet ? 2 : 0);
 
                           // Reset fields
                           _partyController.clear();

@@ -13,6 +13,9 @@ import 'package:swastik_mobile_app/features/home/presentation/screens/statement_
 import 'package:swastik_mobile_app/features/home/presentation/widgets/custom_filter_sheet.dart';
 import 'package:swastik_mobile_app/features/settings/presentation/widgets/avatar_widget.dart';
 import 'package:swastik_mobile_app/features/settings/providers/profile_providers.dart';
+import 'package:swastik_mobile_app/features/auth/providers/user_profiles_provider.dart';
+import 'package:swastik_mobile_app/features/auth/providers/auth_providers.dart';
+import 'package:swastik_mobile_app/features/settings/presentation/screens/device_management_screen.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -148,6 +151,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+
+
     final isTablet = AppResponsive.isTablet(context);
     final transactionsAsync = ref.watch(transactionsStreamProvider);
     final transactions = transactionsAsync.value ?? [];
@@ -1321,6 +1326,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   Widget _buildProfileHeader() {
     final profile = ref.watch(activeProfileProvider);
+    final isStaff = ref.watch(isStaffProvider);
 
     return Row(
       children: [
@@ -1351,12 +1357,36 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             overflow: TextOverflow.ellipsis,
           ),
         ),
-        IconButton(
-          onPressed: () {},
-          icon: const Icon(
-            Icons.notifications_none_outlined,
-            color: Color(0xFF4A3E1F),
-            size: 28,
+        if (!isStaff)
+          IconButton(
+            onPressed: () {
+              Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const DeviceManagementScreen(initialTabIndex: 1),
+              ),
+            );
+          },
+          icon: Badge(
+            isLabelVisible: ref.watch(userProfilesNotifierProvider).profiles.where((p) {
+              final isPending = p.status == 'pending_approval' || p.requestPending == true;
+              if (!isPending) return false;
+              final diff = DateTime.now().difference(p.requestedAt ?? p.createdAt ?? DateTime.now());
+              return diff.inMinutes < 5;
+            }).isNotEmpty,
+            label: Text(
+              ref.watch(userProfilesNotifierProvider).profiles.where((p) {
+                final isPending = p.status == 'pending_approval' || p.requestPending == true;
+                if (!isPending) return false;
+                final diff = DateTime.now().difference(p.requestedAt ?? p.createdAt ?? DateTime.now());
+                return diff.inMinutes < 5;
+              }).length.toString(),
+            ),
+            child: const Icon(
+              Icons.notifications_none_outlined,
+              color: Color(0xFF4A3E1F),
+              size: 28,
+            ),
           ),
         ),
       ],

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:swastik_mobile_app/core/widgets/restricted_feature_card.dart';
 import 'package:swastik_mobile_app/core/utils/responsive_utils.dart';
+import 'package:swastik_mobile_app/features/auth/providers/auth_providers.dart';
 import '../providers/navigation_provider.dart';
 
 class CustomBottomNavBar extends ConsumerWidget {
@@ -11,6 +13,7 @@ class CustomBottomNavBar extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final currentIndex = ref.watch(navigationProvider);
     final isTablet = AppResponsive.isTablet(context);
+    final isStaff = ref.watch(isStaffProvider);
 
     return Container(
       decoration: BoxDecoration(
@@ -88,7 +91,12 @@ class CustomBottomNavBar extends ConsumerWidget {
                         label: 'Ledger',
                         isSelected: currentIndex == 2,
                         isTablet: isTablet,
-                        onTap: () => ref.read(navigationProvider.notifier).setIndex(2),
+                        isStaff: isStaff,
+                        onTap: () {
+                          if (!isStaff) {
+                            ref.read(navigationProvider.notifier).setIndex(2);
+                          }
+                        },
                       ),
                       _NavBarItem(
                         icon: Icons.notifications_active_rounded,
@@ -122,6 +130,7 @@ class _NavBarItem extends StatelessWidget {
   final bool isSelected;
   final bool isTablet;
   final VoidCallback onTap;
+  final bool isStaff;
 
   const _NavBarItem({
     required this.icon,
@@ -129,6 +138,7 @@ class _NavBarItem extends StatelessWidget {
     required this.isSelected,
     required this.isTablet,
     required this.onTap,
+    this.isStaff = false,
   });
 
   @override
@@ -138,59 +148,69 @@ class _NavBarItem extends StatelessWidget {
     final double fontSize = isTablet ? 13 : 11;
 
     return Expanded(
-      child: GestureDetector(
-        onTap: onTap,
-        behavior: HitTestBehavior.opaque,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            SizedBox(
-              width: bgSize,
-              height: bgSize,
-              child: Center(
-                child: AnimatedScale(
-                  scale: isSelected ? 1.15 : 1.0,
-                  duration: const Duration(milliseconds: 240),
-                  curve: Curves.easeOutCubic,
-                  child: Icon(
-                    icon,
-                    color: isSelected
-                        ? const Color(0xFFCFA63A)
-                        : const Color(0xFF4D4635).withValues(alpha: 0.6),
-                    size: iconSize,
+      child: RestrictedFeatureCard(
+        isStaff: isStaff,
+        lockAlignment: Alignment.topCenter,
+        lockPadding: EdgeInsets.only(
+          top: isTablet ? 6 : 4,
+          left: isTablet ? 26 : 22,
+        ),
+        containerSize: 15.0,
+        lockIconSize: 9.0,
+        child: GestureDetector(
+          onTap: onTap,
+          behavior: HitTestBehavior.opaque,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              SizedBox(
+                width: bgSize,
+                height: bgSize,
+                child: Center(
+                  child: AnimatedScale(
+                    scale: isSelected ? 1.15 : 1.0,
+                    duration: const Duration(milliseconds: 240),
+                    curve: Curves.easeOutCubic,
+                    child: Icon(
+                      icon,
+                      color: isSelected
+                          ? const Color(0xFFCFA63A)
+                          : const Color(0xFF4D4635).withValues(alpha: 0.6),
+                      size: iconSize,
+                    ),
                   ),
                 ),
               ),
-            ),
-            const SizedBox(height: 6),
-            // Label with style animation
-            AnimatedDefaultTextStyle(
-              duration: const Duration(milliseconds: 300),
-              curve: Curves.easeOutCubic,
-              style: isTablet
-                  ? GoogleFonts.montserrat(
-                      fontSize: fontSize,
-                      fontWeight: isSelected
-                          ? FontWeight.bold
-                          : FontWeight.w600,
-                      color: isSelected
-                          ? const Color(0xFF01565B)
-                          : const Color(0xFF4D4635).withValues(alpha: 0.6),
-                      letterSpacing: isSelected ? 0.3 : 0,
-                    )
-                  : GoogleFonts.montserrat(
-                      fontSize: fontSize,
-                      fontWeight: isSelected
-                          ? FontWeight.bold
-                          : FontWeight.w600,
-                      color: isSelected
-                          ? const Color(0xFF01565B)
-                          : const Color(0xFF4D4635).withValues(alpha: 0.6),
-                      letterSpacing: isSelected ? 0.3 : 0,
-                    ),
-              child: Text(label),
-            ),
-          ],
+              const SizedBox(height: 6),
+              // Label with style animation
+              AnimatedDefaultTextStyle(
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeOutCubic,
+                style: isTablet
+                    ? GoogleFonts.montserrat(
+                        fontSize: fontSize,
+                        fontWeight: isSelected
+                            ? FontWeight.bold
+                            : FontWeight.w600,
+                        color: isSelected
+                            ? const Color(0xFF01565B)
+                            : const Color(0xFF4D4635).withValues(alpha: 0.6),
+                        letterSpacing: isSelected ? 0.3 : 0,
+                      )
+                    : GoogleFonts.montserrat(
+                        fontSize: fontSize,
+                        fontWeight: isSelected
+                            ? FontWeight.bold
+                            : FontWeight.w600,
+                        color: isSelected
+                            ? const Color(0xFF01565B)
+                            : const Color(0xFF4D4635).withValues(alpha: 0.6),
+                        letterSpacing: isSelected ? 0.3 : 0,
+                      ),
+                child: Text(label),
+              ),
+            ],
+          ),
         ),
       ),
     );

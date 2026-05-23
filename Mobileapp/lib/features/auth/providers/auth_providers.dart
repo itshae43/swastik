@@ -1,10 +1,13 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:swastik_mobile_app/core/services/auth_service.dart';
 import 'package:swastik_mobile_app/features/auth/models/user_profile.dart';
 import 'package:swastik_mobile_app/features/auth/providers/user_profiles_provider.dart';
+import 'package:swastik_mobile_app/constants/api_config.dart';
 
 final authServiceProvider = Provider<AuthService>((ref) => AuthService());
 
@@ -26,6 +29,7 @@ class AuthNotifier extends Notifier<AuthStatus> {
   Timer? _logoutTimer;
   Timer? _pollingTimer;
   DateTime? _localLastApprovalTime;
+  http.Client? _sseClient;
 
   @override
   AuthStatus build() {
@@ -40,10 +44,37 @@ class AuthNotifier extends Notifier<AuthStatus> {
       final isVerified = await ref.read(authServiceProvider).verifyDevice();
       state = isVerified ? AuthStatus.verified : AuthStatus.unverified;
       debugPrint('[AuthNotifier] Verification result: $state');
+      
+      if (isVerified) {
+        _startAdminSseListener();
+      }
     } catch (e) {
       debugPrint('[AuthNotifier] Verification FAILED with error: $e');
       state = AuthStatus.error;
     }
+  }
+
+  void _startAdminSseListener() {
+    _sseClient?.close();
+    _sseClient = http.Client();
+    
+    final request = http.Request('GET', Uri.parse('${ApiConfig.baseUrl}/api/events'));
+    
+    _sseClient!.send(request).then((response) {
+      response.stream.transform(utf8.decoder).listen((data) {
+        if (data.contains('profiles_updated')) {
+          debugPrint('[AuthNotifier] SSE received profiles_updated. Fetching profiles...');
+          ref.read(userProfilesNotifierProvider.notifier).fetchProfiles();
+        }
+      }, onError: (err) {
+        debugPrint('[AuthNotifier] SSE Error: $err');
+        _sseClient?.close();
+      }, onDone: () {
+        debugPrint('[AuthNotifier] SSE connection closed.');
+      });
+    }).catchError((err) {
+      debugPrint('[AuthNotifier] SSE connection failed: $err');
+    });
   }
 
   void loginAsStaff(UserProfileModel profile) {
@@ -53,6 +84,7 @@ class AuthNotifier extends Notifier<AuthStatus> {
 
     _logoutTimer?.cancel();
     _pollingTimer?.cancel();
+    _sseClient?.close();
     
     if (profile.expiresAt != null) {
       final diff = profile.expiresAt!.difference(DateTime.now());
@@ -126,6 +158,7 @@ class AuthNotifier extends Notifier<AuthStatus> {
   void logoutLocal() {
     _logoutTimer?.cancel();
     _pollingTimer?.cancel();
+    _sseClient?.close();
     ref.read(currentUserProfileProvider.notifier).setProfile(null);
     state = AuthStatus.unverified;
   }

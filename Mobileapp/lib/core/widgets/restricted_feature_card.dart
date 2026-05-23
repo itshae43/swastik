@@ -1,36 +1,81 @@
 import 'package:flutter/material.dart';
 
-class RestrictedFeatureCard extends StatefulWidget {
+class RestrictedFeatureCard extends StatelessWidget {
   final bool isStaff;
   final Widget child;
+  final AlignmentGeometry lockAlignment;
+  final EdgeInsetsGeometry lockPadding;
+  final double lockIconSize;
+  final double containerSize;
 
   const RestrictedFeatureCard({
     super.key,
     required this.isStaff,
     required this.child,
+    this.lockAlignment = Alignment.topRight,
+    this.lockPadding = const EdgeInsets.all(4.0),
+    this.lockIconSize = 12.0,
+    this.containerSize = 20.0,
   });
 
   @override
-  State<RestrictedFeatureCard> createState() => _RestrictedFeatureCardState();
+  Widget build(BuildContext context) {
+    if (!isStaff) {
+      return child;
+    }
+    return _LockedFeatureWrapper(
+      lockAlignment: lockAlignment,
+      lockPadding: lockPadding,
+      lockIconSize: lockIconSize,
+      containerSize: containerSize,
+      child: child,
+    );
+  }
 }
 
-class _RestrictedFeatureCardState extends State<RestrictedFeatureCard>
+class _LockedFeatureWrapper extends StatefulWidget {
+  final Widget child;
+  final AlignmentGeometry lockAlignment;
+  final EdgeInsetsGeometry lockPadding;
+  final double lockIconSize;
+  final double containerSize;
+
+  const _LockedFeatureWrapper({
+    required this.child,
+    required this.lockAlignment,
+    required this.lockPadding,
+    required this.lockIconSize,
+    required this.containerSize,
+  });
+
+  @override
+  State<_LockedFeatureWrapper> createState() => _LockedFeatureWrapperState();
+}
+
+class _LockedFeatureWrapperState extends State<_LockedFeatureWrapper>
     with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _glowAnimation;
+  late final AnimationController _controller;
+  late final Animation<double> _scaleAnimation;
 
   @override
   void initState() {
     super.initState();
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 200),
+      duration: const Duration(milliseconds: 150),
     );
-    _glowAnimation = CurvedAnimation(
-      parent: _controller,
-      curve: Curves.easeOutBack,
-      reverseCurve: Curves.easeIn,
-    );
+    _scaleAnimation = TweenSequence<double>([
+      TweenSequenceItem(
+        tween: Tween<double>(begin: 1.0, end: 1.3)
+            .chain(CurveTween(curve: Curves.easeOutBack)),
+        weight: 50,
+      ),
+      TweenSequenceItem(
+        tween: Tween<double>(begin: 1.3, end: 1.0)
+            .chain(CurveTween(curve: Curves.easeInCubic)),
+        weight: 50,
+      ),
+    ]).animate(_controller);
   }
 
   @override
@@ -39,96 +84,66 @@ class _RestrictedFeatureCardState extends State<RestrictedFeatureCard>
     super.dispose();
   }
 
-  void _triggerGlow() {
+  void _triggerPulse() {
     if (_controller.isAnimating) return;
-    _controller.forward(from: 0.0).then((_) {
-      Future.delayed(const Duration(milliseconds: 350), () {
-        if (mounted) {
-          _controller.reverse();
-        }
-      });
-    });
+    _controller.forward(from: 0.0);
   }
 
   @override
   Widget build(BuildContext context) {
-    if (!widget.isStaff) {
-      return widget.child;
-    }
-
-    final colorTween = ColorTween(
-      begin: const Color(0xFF9E9E9E), // subtle iOS gray
-      end: const Color(0xFFFFB300),   // premium amber/gold glow
-    ).animate(_glowAnimation);
-
-    final scaleTween = Tween<double>(
-      begin: 1.0,
-      end: 1.25,
-    ).animate(_glowAnimation);
-
-    final glowSizeTween = Tween<double>(
-      begin: 0.0,
-      end: 14.0,
-    ).animate(_glowAnimation);
-
-    final glowOpacityTween = Tween<double>(
-      begin: 0.0,
-      end: 0.8,
-    ).animate(_glowAnimation);
-
     return GestureDetector(
-      onTap: _triggerGlow,
+      onTap: _triggerPulse,
       behavior: HitTestBehavior.opaque,
       child: Stack(
-        alignment: Alignment.center,
+        clipBehavior: Clip.none,
         children: [
           Opacity(
-            opacity: 0.6,
+            opacity: 0.75,
             child: IgnorePointer(
               ignoring: true,
               child: widget.child,
             ),
           ),
-          AnimatedBuilder(
-            animation: _glowAnimation,
-            builder: (context, child) {
-              final color = colorTween.value;
-              final scale = scaleTween.value;
-              final glowSize = glowSizeTween.value;
-              final glowOpacity = glowOpacityTween.value;
-
-              return Transform.scale(
-                scale: scale,
-                child: Container(
-                  padding: const EdgeInsets.all(6),
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: Colors.white,
-                    boxShadow: [
-                      if (glowSize > 0.1)
-                        BoxShadow(
-                          color: const Color(0xFFFFB300).withOpacity(glowOpacity),
-                          blurRadius: glowSize,
-                          spreadRadius: glowSize / 3,
-                        ),
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.06),
-                        blurRadius: 4,
-                        offset: const Offset(0, 2),
+          Positioned.fill(
+            child: Align(
+              alignment: widget.lockAlignment,
+              child: Padding(
+                padding: widget.lockPadding,
+                child: ScaleTransition(
+                  scale: _scaleAnimation,
+                  child: Container(
+                    width: widget.containerSize,
+                    height: widget.containerSize,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFF3D0), // Soft cream/gold
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: const Color(0xFFD4B13B).withValues(alpha: 0.6),
+                        width: 1.2,
                       ),
-                    ],
-                  ),
-                  child: Icon(
-                    Icons.lock_rounded,
-                    size: 14,
-                    color: color,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.05),
+                          blurRadius: 3,
+                          offset: const Offset(0, 1.5),
+                        ),
+                      ],
+                    ),
+                    child: Center(
+                      child: Icon(
+                        Icons.lock_rounded,
+                        size: widget.lockIconSize,
+                        color: const Color(0xFF8A7311), // Rich mustard gold
+                      ),
+                    ),
                   ),
                 ),
-              );
-            },
+              ),
+            ),
           ),
         ],
       ),
     );
   }
 }
+

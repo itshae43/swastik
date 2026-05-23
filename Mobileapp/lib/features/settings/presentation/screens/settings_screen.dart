@@ -92,9 +92,12 @@ class SettingsScreen extends ConsumerWidget {
                     ),
                     RestrictedFeatureCard(
                       isStaff: isStaff,
+                      lockAlignment: Alignment.centerRight,
+                      lockPadding: EdgeInsets.only(right: isTablet ? 20 : 16),
                       child: _buildSettingsTile(
                         icon: Icons.devices_rounded,
                         label: 'Device Management',
+                        isLocked: isStaff,
                         onTap: () {
                           if (!isStaff) {
                             Navigator.of(context).push(
@@ -261,6 +264,7 @@ class SettingsScreen extends ConsumerWidget {
     required VoidCallback onTap,
     required bool isTablet,
     required bool showDivider,
+    bool isLocked = false,
   }) {
     return GestureDetector(
       onTap: onTap,
@@ -297,11 +301,14 @@ class SettingsScreen extends ConsumerWidget {
                     ),
                   ),
                 ),
-                Icon(
-                  Icons.chevron_right_rounded,
-                  color: Colors.grey[400],
-                  size: isTablet ? 22 : 20,
-                ),
+                if (isLocked)
+                  SizedBox(width: isTablet ? 22 : 20)
+                else
+                  Icon(
+                    Icons.chevron_right_rounded,
+                    color: Colors.grey[400],
+                    size: isTablet ? 22 : 20,
+                  ),
               ],
             ),
           ),

@@ -134,6 +134,14 @@ class CollapsibleSidebar extends ConsumerWidget {
                         const SizedBox(height: 8),
                         RestrictedFeatureCard(
                           isStaff: isStaff,
+                          lockAlignment: isCollapsed
+                              ? Alignment.topRight
+                              : Alignment.centerRight,
+                          lockPadding: isCollapsed
+                              ? const EdgeInsets.only(top: 2, right: 14)
+                              : const EdgeInsets.only(right: 24),
+                          containerSize: isCollapsed ? 16.0 : 20.0,
+                          lockIconSize: isCollapsed ? 10.0 : 12.0,
                           child: _SidebarItem(
                             icon: Icons.note_alt_outlined,
                             label: 'Ledger',
