@@ -1,4 +1,7 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import 'package:swastik_mobile_app/core/utils/time_utils.dart';
 
 class NewEntryBottomSheet extends StatefulWidget {
   const NewEntryBottomSheet({super.key});
@@ -57,27 +60,64 @@ class _NewEntryBottomSheetState extends State<NewEntryBottomSheet> {
                     ),
                   ],
                 ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: Colors.grey.shade300),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.calendar_today, size: 16, color: Colors.grey.shade800),
-                      const SizedBox(width: 6),
-                      Text(
-                        '24 Oct 2023', // Hardcoded for demo
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.grey.shade800,
+                StreamBuilder<DateTime>(
+                  stream: Stream.periodic(const Duration(seconds: 1), (_) => TimeUtils.istNow),
+                  initialData: TimeUtils.istNow,
+                  builder: (context, snapshot) {
+                    final now = snapshot.data!;
+                    final dateFormatted = DateFormat('dd MMM yyyy').format(now);
+                    final timeFormatted = DateFormat('hh:mm a').format(now);
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: Colors.grey.shade300),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.calendar_today, size: 16, color: Colors.grey.shade800),
+                              const SizedBox(width: 6),
+                              Text(
+                                dateFormatted,
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.grey.shade800,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
+                        const SizedBox(height: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: Colors.grey.shade300),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.access_time, size: 16, color: Colors.grey.shade800),
+                              const SizedBox(width: 6),
+                              Text(
+                                timeFormatted,
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.grey.shade800,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    );
+                  }
                 ),
               ],
             ),

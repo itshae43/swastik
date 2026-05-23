@@ -13,6 +13,7 @@ export interface IUserProfile {
     deviceModel: string;
     platform: string;
   };
+  expiresAt: Date | null;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -35,6 +36,7 @@ const userProfileSchema = new Schema<IUserProfile>(
       deviceModel: { type: String, default: '' },
       platform: { type: String, default: '' },
     },
+    expiresAt: { type: Date, default: null },
   },
   {
     timestamps: true,

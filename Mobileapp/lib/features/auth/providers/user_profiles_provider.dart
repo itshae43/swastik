@@ -149,6 +149,58 @@ class UserProfilesNotifier extends Notifier<UserProfilesState> {
       return false;
     }
   }
+
+  Future<bool> approveProfile(String id) async {
+    state = state.copyWith(isLoading: true, error: null);
+    try {
+      final apiService = ref.read(apiServiceProvider);
+      final response = await apiService.approveProfileAccess(id);
+      final updatedProfile = UserProfileModel.fromJson(response);
+
+      final updatedProfiles = state.profiles.map((p) {
+        return p.id == id ? updatedProfile : p;
+      }).toList();
+
+      state = state.copyWith(
+        profiles: updatedProfiles,
+        isLoading: false,
+      );
+      return true;
+    } catch (e) {
+      debugPrint('[UserProfilesNotifier] Error approving profile: $e');
+      state = state.copyWith(
+        isLoading: false,
+        error: 'Failed to approve profile access',
+      );
+      return false;
+    }
+  }
+
+  Future<bool> declineProfile(String id) async {
+    state = state.copyWith(isLoading: true, error: null);
+    try {
+      final apiService = ref.read(apiServiceProvider);
+      final response = await apiService.declineProfileAccess(id);
+      final updatedProfile = UserProfileModel.fromJson(response);
+
+      final updatedProfiles = state.profiles.map((p) {
+        return p.id == id ? updatedProfile : p;
+      }).toList();
+
+      state = state.copyWith(
+        profiles: updatedProfiles,
+        isLoading: false,
+      );
+      return true;
+    } catch (e) {
+      debugPrint('[UserProfilesNotifier] Error declining profile: $e');
+      state = state.copyWith(
+        isLoading: false,
+        error: 'Failed to decline profile access',
+      );
+      return false;
+    }
+  }
 }
 
 final userProfilesNotifierProvider =

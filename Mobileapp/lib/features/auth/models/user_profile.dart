@@ -9,6 +9,7 @@ class UserProfileModel {
   final DateTime? lastApprovalTime;
   final String? approvedBy;
   final UserProfileDeviceInfo deviceInfo;
+  final DateTime? expiresAt;
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
@@ -23,6 +24,7 @@ class UserProfileModel {
     this.lastApprovalTime,
     this.approvedBy,
     required this.deviceInfo,
+    this.expiresAt,
     this.createdAt,
     this.updatedAt,
   });
@@ -43,6 +45,9 @@ class UserProfileModel {
           : null,
       approvedBy: json['approvedBy'],
       deviceInfo: UserProfileDeviceInfo.fromJson(json['deviceInfo'] ?? {}),
+      expiresAt: json['expiresAt'] != null
+          ? DateTime.tryParse(json['expiresAt'].toString())
+          : null,
       createdAt: json['createdAt'] != null
           ? DateTime.tryParse(json['createdAt'].toString())
           : null,
@@ -64,6 +69,7 @@ class UserProfileModel {
       'lastApprovalTime': lastApprovalTime?.toIso8601String(),
       'approvedBy': approvedBy,
       'deviceInfo': deviceInfo.toJson(),
+      'expiresAt': expiresAt?.toIso8601String(),
       'createdAt': createdAt?.toIso8601String(),
       'updatedAt': updatedAt?.toIso8601String(),
     };
@@ -80,6 +86,7 @@ class UserProfileModel {
     DateTime? lastApprovalTime,
     String? approvedBy,
     UserProfileDeviceInfo? deviceInfo,
+    DateTime? expiresAt,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -94,6 +101,7 @@ class UserProfileModel {
       lastApprovalTime: lastApprovalTime ?? this.lastApprovalTime,
       approvedBy: approvedBy ?? this.approvedBy,
       deviceInfo: deviceInfo ?? this.deviceInfo,
+      expiresAt: expiresAt ?? this.expiresAt,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );

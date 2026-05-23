@@ -1,13 +1,24 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:swastik_mobile_app/core/models/reminder_model.dart';
 import 'package:swastik_mobile_app/core/services/reminder_service.dart';
+import 'package:swastik_mobile_app/core/services/notification_service.dart';
 import 'package:swastik_mobile_app/features/auth/providers/auth_providers.dart';
 import 'package:swastik_mobile_app/core/utils/constants.dart';
 
 final reminderServiceProvider = Provider((ref) => ReminderService());
 
+final Set<String> _scheduledReminders = {};
+
 final remindersStreamProvider = StreamProvider<List<ReminderModel>>((ref) {
-  return ref.watch(reminderServiceProvider).getReminders(AppConstants.centralDbId);
+  return ref.watch(reminderServiceProvider).getReminders(AppConstants.centralDbId).map((reminders) {
+    for (var r in reminders) {
+      if (!_scheduledReminders.contains(r.id) && r.status == ReminderStatus.upcoming && r.date.isAfter(DateTime.now())) {
+        NotificationService().scheduleReminderNotification(r);
+        _scheduledReminders.add(r.id);
+      }
+    }
+    return reminders;
+  });
 });
 
 final partyRemindersStreamProvider = StreamProvider.family<List<ReminderModel>, String>((ref, partyId) {
@@ -64,6 +75,7 @@ class ReminderNotifier extends Notifier<AsyncValue<void>> {
     state = const AsyncValue.loading();
     try {
       await ref.read(reminderServiceProvider).markAsDone(id);
+      await NotificationService().cancelReminderNotification(id);
       state = const AsyncValue.data(null);
     } catch (e, st) {
       state = AsyncValue.error(e, st);
@@ -74,6 +86,7 @@ class ReminderNotifier extends Notifier<AsyncValue<void>> {
     state = const AsyncValue.loading();
     try {
       await ref.read(reminderServiceProvider).deleteReminder(id);
+      await NotificationService().cancelReminderNotification(id);
       state = const AsyncValue.data(null);
     } catch (e, st) {
       state = AsyncValue.error(e, st);

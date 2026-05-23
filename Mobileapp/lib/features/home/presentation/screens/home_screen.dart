@@ -2,18 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:swastik_mobile_app/core/models/user_model.dart';
 import 'package:swastik_mobile_app/core/models/party_model.dart';
 import 'package:swastik_mobile_app/core/models/transaction_model.dart';
 import 'package:swastik_mobile_app/core/utils/responsive_utils.dart';
-import 'package:swastik_mobile_app/features/auth/providers/auth_providers.dart';
 import 'package:swastik_mobile_app/features/ledger/providers/transaction_providers.dart';
-import 'package:swastik_mobile_app/features/navigation/presentation/providers/navigation_provider.dart';
 import 'package:swastik_mobile_app/features/parties/providers/party_providers.dart';
 import 'package:swastik_mobile_app/features/parties/presentation/widgets/quick_add_party_bottom_sheet.dart';
 import 'package:intl/intl.dart';
 import 'package:swastik_mobile_app/features/home/presentation/screens/statement_screen.dart';
 import 'package:swastik_mobile_app/features/home/presentation/widgets/custom_filter_sheet.dart';
+import 'package:swastik_mobile_app/features/settings/presentation/widgets/avatar_widget.dart';
+import 'package:swastik_mobile_app/features/settings/providers/profile_providers.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -188,23 +187,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final String displayGold = '${goldVal % 1 == 0 ? goldVal.toInt().toString() : goldVal.toStringAsFixed(3).replaceAll(RegExp(r"\.?0+$"), "")} g';
     final String displayDiamond = '${diamondVal % 1 == 0 ? diamondVal.toInt().toString() : diamondVal.toStringAsFixed(2).replaceAll(RegExp(r"\.?0+$"), "")} ct';
 
-    // Today's summary for Mobile
-    double todayInVal = 0.0;
-    double todayOutVal = 0.0;
-    final now = DateTime.now();
-    for (final t in transactions) {
-      if (t.date.year == now.year && t.date.month == now.month && t.date.day == now.day) {
-        if (t.metalType.isEmpty) {
-          if (t.type == TransactionType.receipt) {
-            todayInVal += t.cashAmount;
-          } else if (t.type == TransactionType.payment) {
-            todayOutVal += t.cashAmount;
-          }
-        }
-      }
-    }
-    final String displayTodayIn = '+₹ ${NumberFormat.decimalPattern('en_IN').format(todayInVal)}';
-    final String displayTodayOut = '-₹ ${NumberFormat.decimalPattern('en_IN').format(todayOutVal)}';
+
 
     if (isTablet) {
       return _buildTabletHomeScreen(
@@ -218,7 +201,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
     // Existing mobile layout
     return Container(
-      color: const Color(0xFFFDFBF7),
+      color: const Color(0xFFFAF6EE),
       child: SafeArea(
         child: SingleChildScrollView(
           physics: const BouncingScrollPhysics(),
@@ -233,11 +216,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 online: displayOnline,
                 gold: displayGold,
                 diamond: displayDiamond,
-              ),
-              const SizedBox(height: 24),
-              _buildTodaysSummary(
-                todayIn: displayTodayIn,
-                todayOut: displayTodayOut,
               ),
               const SizedBox(height: 24),
               _buildRecentTransactions(),
@@ -261,7 +239,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     required String diamond,
   }) {
     final dateStr = DateFormat('EEEE, d MMMM').format(DateTime.now());
-    final isPortrait = MediaQuery.of(context).orientation == Orientation.portrait;
 
     return GestureDetector(
       onTap: () {
@@ -624,7 +601,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     AsyncValue<List<TransactionModel>> transactionsAsync,
   ) {
     final transactions = transactionsAsync.value ?? [];
-    final now = DateTime.now();
 
     // 1. Date filter (uses shared _applyDateFilter)
     final dateFilteredTransactions = _applyDateFilter(transactions);
@@ -1344,8 +1320,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   // ==========================================
 
   Widget _buildProfileHeader() {
-    final userName = 'Admin';
-    final initial = userName.isNotEmpty ? userName[0].toUpperCase() : 'U';
+    final profile = ref.watch(activeProfileProvider);
 
     return Row(
       children: [
@@ -1355,29 +1330,25 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             shape: BoxShape.circle,
             border: Border.all(color: const Color(0xFF8A7311), width: 1.5),
           ),
-          child: CircleAvatar(
-            radius: 20,
-            backgroundColor: const Color(0xFFD4B13B),
-            child: Text(
-              initial,
-              style: GoogleFonts.montserrat(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-              ),
-            ),
+          child: UserAvatar(
+            name: profile.name,
+            gradientIndex: profile.gradientIndex,
+            iconIndex: profile.iconIndex,
+            size: 40,
+            fontSize: 16,
+            iconSize: 18,
           ),
         ),
         const SizedBox(width: 12),
         Expanded(
           child: Text(
-            userName,
+            profile.name,
             style: GoogleFonts.montserrat(
-              fontSize: 20,
+              fontSize: 24,
               fontWeight: FontWeight.bold,
-              color: const Color(0xFF6B5800),
-              letterSpacing: -0.5,
+              color: const Color(0xFF735C0F),
             ),
+            overflow: TextOverflow.ellipsis,
           ),
         ),
         IconButton(
@@ -1404,14 +1375,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       physics: const NeverScrollableScrollPhysics(),
       mainAxisSpacing: 12,
       crossAxisSpacing: 12,
-      childAspectRatio: 1.4,
+      childAspectRatio: 1.7,
       children: [
         _buildGridCard(
           'Total Cash',
           cash,
-          Icons.account_balance_wallet_outlined,
-          const Color(0xFFF9F6ED),
-          const Color(0xFFB08900),
+          Icons.payments_outlined,
+          const Color(0xFFE8F8F0),
+          const Color(0xFF01565B),
+          const Color(0xFF01565B),
           onTap: () => Navigator.push(
             context,
             MaterialPageRoute(
@@ -1422,9 +1394,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         _buildGridCard(
           'Online Balance',
           online,
-          Icons.account_balance_outlined,
-          const Color(0xFFF9F6ED),
-          const Color(0xFFB08900),
+          Icons.account_balance_rounded,
+          const Color(0xFFE6F0FA),
+          const Color(0xFF2E5BFF),
+          const Color(0xFF2E5BFF),
           onTap: () => Navigator.push(
             context,
             MaterialPageRoute(
@@ -1435,9 +1408,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         _buildGridCard(
           'Gold Balance',
           gold,
-          Icons.widgets_outlined,
-          const Color(0xFFE8C73D),
-          const Color(0xFF4A3E1F),
+          Icons.widgets_rounded,
+          const Color(0xFFFFF9E6),
+          const Color(0xFF735C0F),
+          const Color(0xFFDFBA6B),
           onTap: () => Navigator.push(
             context,
             MaterialPageRoute(
@@ -1448,9 +1422,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         _buildGridCard(
           'Diamond Balance',
           diamond,
-          Icons.diamond_outlined,
+          Icons.diamond_rounded,
           const Color(0xFFE3EDF7),
-          const Color(0xFF5B81A8),
+          const Color(0xFF4F709C),
+          const Color(0xFF8EACCD),
           onTap: () => Navigator.push(
             context,
             MaterialPageRoute(
@@ -1467,17 +1442,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     String value,
     IconData icon,
     Color iconBgColor,
-    Color iconColor, {
+    Color iconColor,
+    Color accentColor, {
     required VoidCallback onTap,
   }) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.grey.withOpacity(0.15)),
+          border: Border.all(
+            color: const Color(0xFFE5DEC9).withOpacity(0.5),
+            width: 1.5,
+          ),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withOpacity(0.02),
@@ -1486,40 +1464,84 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             ),
           ],
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        clipBehavior: Clip.antiAlias,
+        child: Row(
           children: [
             Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: iconBgColor,
-                shape: BoxShape.circle,
-              ),
-              child: Icon(icon, color: iconColor, size: 20),
+              width: 4,
+              color: accentColor,
             ),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: GoogleFonts.montserrat(
-                    fontSize: 12,
-                    color: Colors.grey[700],
-                    fontWeight: FontWeight.w600,
-                  ),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            title,
+                            style: GoogleFonts.montserrat(
+                              fontSize: 12,
+                              color: const Color(0xFF5E543F).withOpacity(0.8),
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 0.5,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            color: iconBgColor,
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(icon, color: iconColor, size: 14),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            value,
+                            style: GoogleFonts.montserrat(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.black87,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        Container(
+                          width: 20,
+                          height: 20,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: accentColor.withOpacity(0.3),
+                            ),
+                          ),
+                          alignment: Alignment.center,
+                          child: Icon(
+                            Icons.chevron_right_rounded,
+                            color: accentColor,
+                            size: 14,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  value,
-                  style: GoogleFonts.montserrat(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black87,
-                    letterSpacing: -0.5,
-                  ),
-                ),
-              ],
+              ),
             ),
           ],
         ),
@@ -1527,190 +1549,85 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
   }
 
-  Widget _buildTodaysSummary({required String todayIn, required String todayOut}) {
+
+  Widget _buildRecentTransactions() {
+    final transactionsAsync = ref.watch(transactionsStreamProvider);
+    final transactions = transactionsAsync.value ?? [];
+
+    // 1. Apply the shared date filter
+    final dateFilteredTransactions = _applyDateFilter(transactions);
+
+    // 2. Apply search query filter
+    final filteredTransactions = dateFilteredTransactions.where((t) {
+      final query = _searchQuery.toLowerCase().trim();
+      if (query.isEmpty) return true;
+      return t.partyName.toLowerCase().contains(query) ||
+          t.notes.toLowerCase().contains(query) ||
+          t.metalType.toLowerCase().contains(query);
+    }).toList();
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          "Today's Summary",
+          "Transactions",
           style: GoogleFonts.montserrat(
-            fontSize: 16,
+            fontSize: 20,
             fontWeight: FontWeight.bold,
-            color: Colors.black87,
+            color: const Color(0xFF01565B),
           ),
         ),
         const SizedBox(height: 12),
-        Container(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.grey.withOpacity(0.15)),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.02),
-                blurRadius: 10,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    vertical: 20,
-                    horizontal: 16,
-                  ),
-                  decoration: const BoxDecoration(
-                    color: Color(0xFFFDFCF7),
-                    borderRadius: BorderRadius.horizontal(
-                      left: Radius.circular(16),
-                    ),
-                  ),
-                  child: IntrinsicHeight(
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 4,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF8A7311),
-                            borderRadius: BorderRadius.circular(2),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Row(
-                              children: [
-                                const Icon(
-                                  Icons.arrow_downward,
-                                  size: 16,
-                                  color: Color(0xFF757575),
-                                ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  "IN",
-                                  style: GoogleFonts.montserrat(
-                                    fontSize: 13,
-                                    color: const Color(0xFF757575),
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              todayIn,
-                              style: GoogleFonts.montserrat(
-                                fontSize: 22,
-                                color: const Color(0xFF8A7311),
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-              Container(
-                width: 1,
-                height: 60,
-                color: Colors.grey.withOpacity(0.15),
-              ),
-              Expanded(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    vertical: 20,
-                    horizontal: 16,
-                  ),
-                  decoration: const BoxDecoration(
-                    color: Color(0xFFFFF9F9),
-                    borderRadius: BorderRadius.horizontal(
-                      right: Radius.circular(16),
-                    ),
-                  ),
-                  child: IntrinsicHeight(
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 4,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFC62828),
-                            borderRadius: BorderRadius.circular(2),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Row(
-                              children: [
-                                const Icon(
-                                  Icons.arrow_upward,
-                                  size: 16,
-                                  color: Color(0xFF757575),
-                                ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  "OUT",
-                                  style: GoogleFonts.montserrat(
-                                    fontSize: 13,
-                                    color: const Color(0xFF757575),
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              todayOut,
-                              style: GoogleFonts.montserrat(
-                                fontSize: 22,
-                                color: const Color(0xFFC62828),
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildRecentTransactions() {
-    final transactionsAsync = ref.watch(transactionsStreamProvider);
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
         Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Expanded(
-              child: Text(
-                "Recent Activity",
-                style: GoogleFonts.montserrat(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: const Color(0xFF4A3E1F),
+              child: Container(
+                height: 40,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: const Color(0xFFE5DEC9)),
                 ),
-                overflow: TextOverflow.ellipsis,
+                child: TextField(
+                  controller: _searchController,
+                  onChanged: (val) {
+                    setState(() {
+                      _searchQuery = val;
+                    });
+                  },
+                  style: GoogleFonts.montserrat(fontSize: 13),
+                  decoration: InputDecoration(
+                    hintText: 'Search transactions...',
+                    hintStyle: GoogleFonts.montserrat(
+                      color: const Color(0xFF5E543F).withOpacity(0.6),
+                      fontSize: 13,
+                    ),
+                    prefixIcon: const Icon(
+                      Icons.search_rounded,
+                      size: 18,
+                      color: Color(0xFF5E543F),
+                    ),
+                    suffixIcon: _searchQuery.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(Icons.clear_rounded, size: 16, color: Color(0xFF5E543F)),
+                            onPressed: () {
+                              _searchController.clear();
+                              setState(() {
+                                _searchQuery = '';
+                              });
+                            },
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
+                          )
+                        : null,
+                    border: InputBorder.none,
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                  ),
+                ),
               ),
             ),
             const SizedBox(width: 8),
-            // Filter Button (mobile)
             PopupMenuButton<String>(
               onSelected: (value) {
                 if (value == 'Custom') {
@@ -1730,7 +1647,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 _buildFilterMenuItem('Custom', 'Custom', Icons.tune_rounded),
               ],
               child: Container(
-                height: 32,
+                height: 40,
                 padding: const EdgeInsets.symmetric(horizontal: 10),
                 decoration: BoxDecoration(
                   color: const Color(0xFFFAF6EE),
@@ -1742,7 +1659,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   children: [
                     const Icon(
                       Icons.filter_list_rounded,
-                      size: 14,
+                      size: 16,
                       color: Color(0xFF5E543F),
                     ),
                     const SizedBox(width: 4),
@@ -1750,7 +1667,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       _filterDisplayLabel,
                       style: GoogleFonts.montserrat(
                         color: const Color(0xFF5E543F),
-                        fontSize: 11,
+                        fontSize: 12,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
@@ -1759,18 +1676,28 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               ),
             ),
             const SizedBox(width: 8),
-            TextButton(
-              onPressed: () {
-                ref
-                    .read(navigationProvider.notifier)
-                    .setIndex(2); // Redirect to Ledger
+            GestureDetector(
+              onTap: () {
+                _showPrintStatementDialog(
+                  context,
+                  filteredTransactions,
+                  'SwarnKhata Statement',
+                  'Period: $_filterDisplayLabel',
+                );
               },
-              child: Text(
-                "View All",
-                style: GoogleFonts.montserrat(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: const Color(0xFF8A7311),
+              child: Container(
+                height: 40,
+                width: 40,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFAF6EE),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: const Color(0xFFE5DEC9)),
+                ),
+                alignment: Alignment.center,
+                child: const Icon(
+                  Icons.print_rounded,
+                  size: 18,
+                  color: Color(0xFF735C0F),
                 ),
               ),
             ),
@@ -1778,10 +1705,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         ),
         const SizedBox(height: 12),
         transactionsAsync.when(
-          data: (transactions) {
-            // Apply the shared date filter
-            final filteredTransactions = _applyDateFilter(transactions);
-
+          data: (_) {
             if (filteredTransactions.isEmpty) {
               return Container(
                 width: double.infinity,
@@ -1800,10 +1724,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               );
             }
 
-            final recent = filteredTransactions.take(4).toList();
-
             return Column(
-              children: recent.map((activity) {
+              children: filteredTransactions.map((activity) {
                 final isCredit =
                     activity.type == TransactionType.receipt ||
                     activity.type == TransactionType.metalIn;

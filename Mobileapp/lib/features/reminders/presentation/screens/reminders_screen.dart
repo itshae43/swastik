@@ -524,106 +524,213 @@ class _RemindersScreenState extends ConsumerState<RemindersScreen>
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setState) => AlertDialog(
+          backgroundColor: const Color(0xFFFDFBF7),
+          surfaceTintColor: Colors.transparent,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(isTablet ? 16 : 12),
+            borderRadius: BorderRadius.circular(isTablet ? 20 : 16),
           ),
           title: Text(
             'Edit Reminder',
             style: GoogleFonts.montserrat(
               fontWeight: FontWeight.bold,
-              fontSize: isTablet ? 21 : 18,
+              fontSize: isTablet ? 22 : 18,
+              color: const Color(0xFF2D2D2D),
             ),
           ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: noteController,
-                style: GoogleFonts.montserrat(fontSize: isTablet ? 16 : 14),
-                decoration: InputDecoration(
-                  labelText: 'Note',
-                  labelStyle: GoogleFonts.montserrat(
-                    fontSize: isTablet ? 14 : 12,
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Note',
+                  style: GoogleFonts.montserrat(
+                    fontWeight: FontWeight.w600,
+                    fontSize: isTablet ? 15 : 13,
+                    color: Colors.grey[700],
                   ),
                 ),
-                maxLines: 3,
-              ),
-              SizedBox(height: isTablet ? 20 : 16),
-              ListTile(
-                title: Text(
-                  'Date: ${DateFormat('dd MMM yyyy • hh:mm a').format(selectedDate)}',
-                  style: GoogleFonts.montserrat(fontSize: isTablet ? 16 : 14),
-                ),
-                trailing: Icon(Icons.calendar_today, size: isTablet ? 22 : 20),
-                onTap: () async {
-                  final date = await showDatePicker(
-                    context: context,
-                    initialDate: selectedDate,
-                    firstDate: DateTime.now(),
-                    lastDate: DateTime.now().add(const Duration(days: 365)),
-                  );
-                  if (date != null) {
-                    final time = await showTimePicker(
-                      context: context,
-                      initialTime: TimeOfDay.fromDateTime(selectedDate),
-                    );
-                    if (time != null) {
-                      setState(() {
-                        selectedDate = DateTime(
-                          date.year,
-                          date.month,
-                          date.day,
-                          time.hour,
-                          time.minute,
-                        );
-                      });
-                    }
-                  }
-                },
-              ),
-            ],
-          ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text(
-              'Cancel',
-              style: GoogleFonts.montserrat(fontSize: isTablet ? 15 : 13),
-            ),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              ref
-                  .read(reminderNotifierProvider.notifier)
-                  .updateReminder(
-                    reminder.copyWith(
-                      note: noteController.text,
-                      date: selectedDate,
+                SizedBox(height: isTablet ? 10 : 8),
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.grey.withOpacity(0.2)),
+                  ),
+                  child: TextField(
+                    controller: noteController,
+                    style: GoogleFonts.montserrat(fontSize: isTablet ? 16 : 14),
+                    decoration: InputDecoration(
+                      hintText: 'Enter your note here...',
+                      hintStyle: GoogleFonts.montserrat(
+                        fontSize: isTablet ? 14 : 12,
+                        color: Colors.grey[400],
+                      ),
+                      border: InputBorder.none,
+                      contentPadding: EdgeInsets.all(isTablet ? 16 : 12),
                     ),
-                  );
-              Navigator.pop(context);
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF4A3E1F),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-              padding: EdgeInsets.symmetric(
-                horizontal: isTablet ? 18 : 16,
-                vertical: isTablet ? 10 : 8,
-              ),
-            ),
-            child: Text(
-              'Save',
-              style: GoogleFonts.montserrat(
-                color: Colors.white,
-                fontSize: isTablet ? 15 : 13,
-                fontWeight: FontWeight.bold,
-              ),
+                    maxLines: 4,
+                  ),
+                ),
+                SizedBox(height: isTablet ? 24 : 20),
+                Text(
+                  'Date & Time',
+                  style: GoogleFonts.montserrat(
+                    fontWeight: FontWeight.w600,
+                    fontSize: isTablet ? 15 : 13,
+                    color: Colors.grey[700],
+                  ),
+                ),
+                SizedBox(height: isTablet ? 10 : 8),
+                InkWell(
+                  onTap: () async {
+                    final now = DateTime.now();
+                    final firstDate = selectedDate.isBefore(now) ? selectedDate : now;
+                    final date = await showDatePicker(
+                      context: context,
+                      initialDate: selectedDate,
+                      firstDate: firstDate,
+                      lastDate: now.add(const Duration(days: 365 * 5)),
+                      builder: (context, child) {
+                        return Theme(
+                          data: Theme.of(context).copyWith(
+                            colorScheme: const ColorScheme.light(
+                              primary: Color(0xFF6B5800), // header background color
+                              onPrimary: Colors.white, // header text color
+                              onSurface: Colors.black, // body text color
+                            ),
+                          ),
+                          child: child!,
+                        );
+                      },
+                    );
+                    if (date != null) {
+                      if (!context.mounted) return;
+                      final time = await showTimePicker(
+                        context: context,
+                        initialTime: TimeOfDay.fromDateTime(selectedDate),
+                        builder: (context, child) {
+                          return Theme(
+                            data: Theme.of(context).copyWith(
+                              colorScheme: const ColorScheme.light(
+                                primary: Color(0xFF6B5800),
+                                onPrimary: Colors.white,
+                                onSurface: Colors.black,
+                              ),
+                            ),
+                            child: child!,
+                          );
+                        },
+                      );
+                      if (time != null) {
+                        setState(() {
+                          selectedDate = DateTime(
+                            date.year,
+                            date.month,
+                            date.day,
+                            time.hour,
+                            time.minute,
+                          );
+                        });
+                      }
+                    }
+                  },
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    padding: EdgeInsets.all(isTablet ? 16 : 14),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.grey.withOpacity(0.2)),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.calendar_today_rounded,
+                          size: isTablet ? 22 : 20,
+                          color: const Color(0xFF6B5800),
+                        ),
+                        SizedBox(width: isTablet ? 12 : 10),
+                        Expanded(
+                          child: Text(
+                            DateFormat('dd MMM yyyy • hh:mm a').format(selectedDate),
+                            style: GoogleFonts.montserrat(
+                              fontSize: isTablet ? 15 : 14,
+                              fontWeight: FontWeight.w500,
+                              color: const Color(0xFF2D2D2D),
+                            ),
+                          ),
+                        ),
+                        Icon(
+                          Icons.edit_calendar_rounded,
+                          size: isTablet ? 20 : 18,
+                          color: Colors.grey[400],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
-        ],
-      ),
+          actionsPadding: EdgeInsets.only(
+            right: isTablet ? 24 : 20,
+            bottom: isTablet ? 20 : 16,
+            top: 8,
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              style: TextButton.styleFrom(
+                padding: EdgeInsets.symmetric(
+                  horizontal: isTablet ? 16 : 12,
+                  vertical: isTablet ? 12 : 10,
+                ),
+              ),
+              child: Text(
+                'Cancel',
+                style: GoogleFonts.montserrat(
+                  fontSize: isTablet ? 15 : 14,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.grey[600],
+                ),
+              ),
+            ),
+            SizedBox(width: isTablet ? 8 : 4),
+            ElevatedButton(
+              onPressed: () {
+                ref
+                    .read(reminderNotifierProvider.notifier)
+                    .updateReminder(
+                      reminder.copyWith(
+                        note: noteController.text,
+                        date: selectedDate,
+                      ),
+                    );
+                Navigator.pop(context);
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF6B5800),
+                foregroundColor: Colors.white,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                padding: EdgeInsets.symmetric(
+                  horizontal: isTablet ? 24 : 20,
+                  vertical: isTablet ? 12 : 10,
+                ),
+              ),
+              child: Text(
+                'Save Changes',
+                style: GoogleFonts.montserrat(
+                  fontSize: isTablet ? 15 : 14,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

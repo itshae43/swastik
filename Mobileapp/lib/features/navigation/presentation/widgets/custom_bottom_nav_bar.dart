@@ -21,7 +21,7 @@ class CustomBottomNavBar extends ConsumerWidget {
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.08),
+            color: Colors.black.withValues(alpha: 0.08),
             blurRadius: 20,
             offset: const Offset(0, -4),
           ),
@@ -35,8 +35,8 @@ class CustomBottomNavBar extends ConsumerWidget {
             builder: (context, constraints) {
               final double totalWidth = constraints.maxWidth;
               final double tabWidth = totalWidth / 5;
-              final double bgSize = isTablet ? 48.0 : 42.0;
-              final double fontSize = isTablet ? 13.0 : 10.0;
+              final double bgSize = isTablet ? 48.0 : 45.0;
+              final double fontSize = isTablet ? 13.0 : 11.0;
               final double navBarHeight = isTablet ? 80.0 : 76.0;
               final double topOffset = (navBarHeight - (bgSize + 6 + fontSize * 1.35)) / 2;
               final double leftOffset = currentIndex * tabWidth + (tabWidth - bgSize) / 2;
@@ -57,7 +57,7 @@ class CustomBottomNavBar extends ConsumerWidget {
                         shape: BoxShape.circle,
                         boxShadow: [
                           BoxShadow(
-                            color: const Color(0xFF01565B).withOpacity(0.3),
+                            color: const Color(0xFF01565B).withValues(alpha: 0.3),
                             blurRadius: 8,
                             offset: const Offset(0, 4),
                           ),
@@ -71,7 +71,7 @@ class CustomBottomNavBar extends ConsumerWidget {
                     children: [
                       _NavBarItem(
                         icon: Icons.home_rounded,
-                        label: 'Home',
+                        label: isTablet ? 'Home' : 'Dashboard',
                         isSelected: currentIndex == 0,
                         isTablet: isTablet,
                         onTap: () => ref.read(navigationProvider.notifier).setIndex(0),
@@ -133,9 +133,9 @@ class _NavBarItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final double bgSize = isTablet ? 48 : 42;
-    final double iconSize = isTablet ? 28 : 24;
-    final double fontSize = isTablet ? 13 : 10;
+    final double bgSize = isTablet ? 48 : 45;
+    final double iconSize = isTablet ? 28 : 26;
+    final double fontSize = isTablet ? 13 : 11;
 
     return Expanded(
       child: GestureDetector(
@@ -156,7 +156,7 @@ class _NavBarItem extends StatelessWidget {
                     icon,
                     color: isSelected
                         ? const Color(0xFFCFA63A)
-                        : const Color(0xFF4D4635).withOpacity(0.6),
+                        : const Color(0xFF4D4635).withValues(alpha: 0.6),
                     size: iconSize,
                   ),
                 ),
@@ -175,17 +175,17 @@ class _NavBarItem extends StatelessWidget {
                           : FontWeight.w600,
                       color: isSelected
                           ? const Color(0xFF01565B)
-                          : const Color(0xFF4D4635).withOpacity(0.6),
+                          : const Color(0xFF4D4635).withValues(alpha: 0.6),
                       letterSpacing: isSelected ? 0.3 : 0,
                     )
-                  : GoogleFonts.inder(
+                  : GoogleFonts.montserrat(
                       fontSize: fontSize,
                       fontWeight: isSelected
-                          ? FontWeight.w700
-                          : FontWeight.w500,
+                          ? FontWeight.bold
+                          : FontWeight.w600,
                       color: isSelected
                           ? const Color(0xFF01565B)
-                          : const Color(0xFF4D4635).withOpacity(0.6),
+                          : const Color(0xFF4D4635).withValues(alpha: 0.6),
                       letterSpacing: isSelected ? 0.3 : 0,
                     ),
               child: Text(label),

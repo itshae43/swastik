@@ -107,7 +107,7 @@ class _LedgerScreenState extends ConsumerState<LedgerScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _buildSearchBar(isTablet),
-                  if (!isTablet) ...[
+                  if (isTablet) ...[
                     const SizedBox(height: 16),
                     _buildFilterChips(isTablet),
                     const SizedBox(height: 24),

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:swastik_mobile_app/core/widgets/restricted_feature_card.dart';
+import 'package:swastik_mobile_app/features/auth/providers/auth_providers.dart';
 
 class CollapsibleSidebar extends ConsumerWidget {
   final int currentIndex;
@@ -21,6 +23,7 @@ class CollapsibleSidebar extends ConsumerWidget {
     const tealColor = Color(0xFF01565B);
     const goldColor = Color(0xFFDFBA6B);
     final dividerColor = const Color(0xFFE5DEC9);
+    final isStaff = ref.watch(isStaffProvider);
 
     final userName = 'Swastik Jewels';
     final userInitial = 'S';
@@ -129,12 +132,17 @@ class CollapsibleSidebar extends ConsumerWidget {
                           onTap: () => onTap(1),
                         ),
                         const SizedBox(height: 8),
-                        _SidebarItem(
-                          icon: Icons.note_alt_outlined,
-                          label: 'Ledger',
-                          isSelected: currentIndex == 2,
-                          isCollapsed: isCollapsed,
-                          onTap: () => onTap(2),
+                        RestrictedFeatureCard(
+                          isStaff: isStaff,
+                          child: _SidebarItem(
+                            icon: Icons.note_alt_outlined,
+                            label: 'Ledger',
+                            isSelected: currentIndex == 2,
+                            isCollapsed: isCollapsed,
+                            onTap: () {
+                              if (!isStaff) onTap(2);
+                            },
+                          ),
                         ),
                         const SizedBox(height: 8),
                         _SidebarItem(

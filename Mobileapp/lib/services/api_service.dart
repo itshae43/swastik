@@ -226,6 +226,26 @@ class ApiService {
     return jsonDecode(res.body) as Map<String, dynamic>;
   }
 
+  /// POST /api/user-profiles/:id/approve — approve access request.
+  Future<Map<String, dynamic>> approveProfileAccess(String id) async {
+    final res = await http.post(
+      Uri.parse('$_base/api/user-profiles/$id/approve'),
+      headers: _jsonHeaders,
+    );
+    _assertOk(res);
+    return jsonDecode(res.body) as Map<String, dynamic>;
+  }
+
+  /// POST /api/user-profiles/:id/decline — decline access request.
+  Future<Map<String, dynamic>> declineProfileAccess(String id) async {
+    final res = await http.post(
+      Uri.parse('$_base/api/user-profiles/$id/decline'),
+      headers: _jsonHeaders,
+    );
+    _assertOk(res);
+    return jsonDecode(res.body) as Map<String, dynamic>;
+  }
+
   // ──────────────────────────────────────────────────────────────────────
   //  Helpers
   // ──────────────────────────────────────────────────────────────────────

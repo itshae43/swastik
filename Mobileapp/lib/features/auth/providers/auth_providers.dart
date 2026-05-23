@@ -1,13 +1,32 @@
+import 'dart:async';
+import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:android_id/android_id.dart';
 import 'package:swastik_mobile_app/core/services/auth_service.dart';
+import 'package:swastik_mobile_app/features/auth/models/user_profile.dart';
+import 'package:swastik_mobile_app/features/auth/providers/user_profiles_provider.dart';
 
 final authServiceProvider = Provider<AuthService>((ref) => AuthService());
+
+class CurrentUserProfileNotifier extends Notifier<UserProfileModel?> {
+  @override
+  UserProfileModel? build() => null;
+
+  void setProfile(UserProfileModel? profile) {
+    state = profile;
+  }
+}
+
+final currentUserProfileProvider = NotifierProvider<CurrentUserProfileNotifier, UserProfileModel?>(CurrentUserProfileNotifier.new);
+final isStaffProvider = Provider<bool>((ref) => ref.watch(currentUserProfileProvider) != null);
 
 enum AuthStatus { initial, loading, unverified, verified, error }
 
 class AuthNotifier extends Notifier<AuthStatus> {
+  Timer? _logoutTimer;
+  Timer? _pollingTimer;
+  DateTime? _localLastApprovalTime;
+
   @override
   AuthStatus build() {
     // Start verification immediately
@@ -27,11 +46,87 @@ class AuthNotifier extends Notifier<AuthStatus> {
     }
   }
 
-  void logout() {
-    state = AuthStatus.unverified;
+  void loginAsStaff(UserProfileModel profile) {
+    ref.read(currentUserProfileProvider.notifier).setProfile(profile);
+    state = AuthStatus.verified;
+    _localLastApprovalTime = profile.lastApprovalTime;
+
+    _logoutTimer?.cancel();
+    _pollingTimer?.cancel();
+    
+    if (profile.expiresAt != null) {
+      final diff = profile.expiresAt!.difference(DateTime.now());
+      if (diff.isNegative) {
+        logoutLocal();
+        return;
+      } else {
+        _logoutTimer = Timer(diff, () {
+          logoutLocal();
+        });
+      }
+    }
+
+    // Start polling the backend for session status
+    _pollingTimer = Timer.periodic(const Duration(seconds: 5), (_) async {
+      try {
+        await ref.read(userProfilesNotifierProvider.notifier).fetchProfiles();
+        final profilesState = ref.read(userProfilesNotifierProvider);
+        
+        final updatedProfile = profilesState.profiles.firstWhere(
+          (p) => p.id == profile.id,
+          orElse: () => profile,
+        );
+        
+        if (!updatedProfile.sessionActive || updatedProfile.status == 'inactive') {
+          debugPrint('[AuthNotifier] Session invalidated remotely. Logging out.');
+          logoutLocal();
+        } else if (_localLastApprovalTime != null && 
+                   updatedProfile.lastApprovalTime != null && 
+                   updatedProfile.lastApprovalTime!.isAfter(_localLastApprovalTime!)) {
+          debugPrint('[AuthNotifier] New device approved. Logging out old device.');
+          logoutLocal();
+        }
+      } catch (e) {
+        debugPrint('[AuthNotifier] Polling error: $e');
+      }
+    });
+  }
+
+  Future<bool> logout() async {
+    final profile = ref.read(currentUserProfileProvider);
+    if (profile == null) {
+      logoutLocal();
+      return true;
+    }
+
+    try {
+      final result = await InternetAddress.lookup('google.com');
+      if (result.isEmpty || result[0].rawAddress.isEmpty) {
+        throw Exception('Offline');
+      }
+    } on SocketException catch (_) {
+      debugPrint('[AuthNotifier] Offline, cannot logout.');
+      return false; // Offline
+    }
+
+    // Online, call API
+    try {
+      final success = await ref.read(authServiceProvider).deauthorizeDevice(profile.id);
+      if (success) {
+        logoutLocal();
+        return true;
+      }
+      return false;
+    } catch (e) {
+      debugPrint('[AuthNotifier] API error during logout: $e');
+      return false;
+    }
   }
 
   void logoutLocal() {
+    _logoutTimer?.cancel();
+    _pollingTimer?.cancel();
+    ref.read(currentUserProfileProvider.notifier).setProfile(null);
     state = AuthStatus.unverified;
   }
 }
@@ -41,61 +136,30 @@ final authStateProvider = NotifierProvider<AuthNotifier, AuthStatus>(AuthNotifie
 class DevicesNotifier extends AsyncNotifier<List<Map<String, dynamic>>> {
   @override
   Future<List<Map<String, dynamic>>> build() async {
-    // Fetch real device ID if available to match "This Device"
-    String? currentAndroidId;
     try {
-      const androidIdPlugin = AndroidId();
-      currentAndroidId = await androidIdPlugin.getId();
+      final devices = await ref.read(authServiceProvider).getDevices();
+      return devices;
     } catch (e) {
-      debugPrint('[DevicesNotifier] Error reading androidId: $e');
+      debugPrint('[DevicesNotifier] Error fetching devices: $e');
+      return [];
     }
-
-    return [
-      {
-        'id': 'session_1',
-        'userName': 'Shailendra',
-        'phoneNumber': '9876543210',
-        'brand': 'Google',
-        'model': 'Pixel 6',
-        'androidId': currentAndroidId ?? 'current_device_id',
-        'lastActive': 'Active Now'
-      },
-      {
-        'id': 'session_2',
-        'userName': 'John Doe',
-        'phoneNumber': '9876543211',
-        'brand': 'Samsung',
-        'model': 'Galaxy Tab S9',
-        'androidId': 'mock_id_2',
-        'lastActive': 'Active 10 mins ago'
-      },
-      {
-        'id': 'session_3',
-        'userName': 'Jane Smith',
-        'phoneNumber': '9876543212',
-        'brand': 'Apple',
-        'model': 'iPad Pro',
-        'androidId': 'mock_id_3',
-        'lastActive': 'Active 2 hours ago'
-      },
-      {
-        'id': 'session_4',
-        'userName': 'Ramesh Kumar',
-        'phoneNumber': '9876543213',
-        'brand': 'OnePlus',
-        'model': 'OnePlus 11',
-        'androidId': 'mock_id_4',
-        'lastActive': 'Active 1 day ago'
-      }
-    ];
   }
 
   Future<bool> deauthorizeDevice(String id) async {
-    final list = state.value;
-    if (list != null) {
-      state = AsyncValue.data(list.where((device) => device['id'] != id).toList());
+    try {
+      final success = await ref.read(authServiceProvider).deauthorizeDevice(id);
+      if (success) {
+        final list = state.value;
+        if (list != null) {
+          state = AsyncValue.data(list.where((device) => device['id'].toString() != id).toList());
+        }
+        return true;
+      }
+      return false;
+    } catch (e) {
+      debugPrint('[DevicesNotifier] Error deauthorizing device $id: $e');
+      return false;
     }
-    return true;
   }
 }
 

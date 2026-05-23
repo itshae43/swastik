@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -22,6 +23,96 @@ class _DeviceVerificationScreenState
   bool _showWarning = false;
   bool _isVerificationTriggeredByClick = false;
 
+  // Timers and countdown for request access
+  Timer? _countdownTimer;
+  Timer? _pollingTimer;
+  int _remainingSeconds = 30;
+
+  void _startTimers(UserProfileModel profile) {
+    _stopTimers();
+    
+    final requestedAt = profile.requestedAt;
+    if (requestedAt != null) {
+      final diff = DateTime.now().difference(requestedAt).inSeconds;
+      _remainingSeconds = (30 - diff).clamp(0, 30);
+    } else {
+      _remainingSeconds = 30;
+    }
+
+    if (_remainingSeconds <= 0) {
+      _handleRequestExpiry();
+      return;
+    }
+
+    // Refresh UI with initial calculated remaining time
+    if (mounted) {
+      setState(() {});
+    }
+
+    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (mounted) {
+        setState(() {
+          if (_remainingSeconds > 0) {
+            _remainingSeconds--;
+          } else {
+            _stopTimers();
+            _handleRequestExpiry();
+          }
+        });
+      }
+    });
+
+    _pollingTimer = Timer.periodic(const Duration(seconds: 2), (timer) async {
+      if (mounted && _selectedProfile != null) {
+        await ref.read(userProfilesNotifierProvider.notifier).fetchProfiles();
+        
+        final state = ref.read(userProfilesNotifierProvider);
+        final latestProfile = state.profiles.firstWhere(
+          (p) => p.id == _selectedProfile!.id,
+          orElse: () => _selectedProfile!,
+        );
+        if (latestProfile.status != 'pending_approval') {
+          _stopTimers();
+          if (mounted) {
+            if (latestProfile.status == 'approved') {
+              ref.read(authStateProvider.notifier).loginAsStaff(latestProfile);
+            } else {
+              setState(() {
+                _selectedProfile = latestProfile;
+              });
+            }
+          }
+        }
+      }
+    });
+  }
+
+  void _stopTimers() {
+    _countdownTimer?.cancel();
+    _countdownTimer = null;
+    _pollingTimer?.cancel();
+    _pollingTimer = null;
+  }
+
+  void _handleRequestExpiry() {
+    if (mounted) {
+      setState(() {
+        _selectedProfile = null;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Access request expired.',
+            style: GoogleFonts.montserrat(),
+          ),
+          backgroundColor: const Color(0xFFD32F2F),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      ref.read(userProfilesNotifierProvider.notifier).fetchProfiles();
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -43,6 +134,7 @@ class _DeviceVerificationScreenState
   @override
   void dispose() {
     _warningController.dispose();
+    _stopTimers();
     super.dispose();
   }
 
@@ -137,7 +229,7 @@ class _DeviceVerificationScreenState
             width: 52,
             height: 52,
             fit: BoxFit.contain,
-            errorBuilder: (_, __, ___) => const Icon(
+            errorBuilder: (ctx, err, stack) => const Icon(
               Icons.diamond_outlined,
               color: Color(0xFFD4B13B),
               size: 40,
@@ -437,7 +529,7 @@ class _DeviceVerificationScreenState
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
             itemCount: profilesState.profiles.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 12),
+            separatorBuilder: (context, index) => const SizedBox(height: 12),
             itemBuilder: (context, index) {
               final profile = profilesState.profiles[index];
               return _buildProfileItem(profile);
@@ -726,11 +818,28 @@ class _DeviceVerificationScreenState
     final isPending = currentProfile.status == 'pending_approval' ||
         currentProfile.requestPending;
 
+    // Safely start timers if in pending state and not already running
+    if (isPending && _countdownTimer == null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _startTimers(currentProfile);
+        }
+      });
+    }
+
+    // Safely stop timers if not pending but timers are running
+    if (!isPending && _countdownTimer != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _stopTimers();
+      });
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         GestureDetector(
           onTap: () {
+            _stopTimers();
             setState(() {
               _selectedProfile = null;
             });
@@ -774,12 +883,20 @@ class _DeviceVerificationScreenState
                 width: 64,
                 height: 64,
                 decoration: BoxDecoration(
-                  color: const Color(0xFFFFF3D0),
+                  color: currentProfile.sessionActive
+                      ? const Color(0xFFFFF2F2)
+                      : isPending
+                          ? const Color(0xFFFFF3D0)
+                          : const Color(0xFFFFF3D0),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(
-                  Icons.person_outline_rounded,
-                  color: Color(0xFFD4B13B),
+                child: Icon(
+                  currentProfile.sessionActive
+                      ? Icons.lock_outline_rounded
+                      : Icons.person_outline_rounded,
+                  color: currentProfile.sessionActive
+                      ? const Color(0xFFD32F2F)
+                      : const Color(0xFFD4B13B),
                   size: 32,
                 ),
               ),
@@ -804,19 +921,27 @@ class _DeviceVerificationScreenState
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 decoration: BoxDecoration(
-                  color: isPending
-                      ? const Color(0xFFFFF3D0)
-                      : const Color(0xFFECEFF1),
+                  color: currentProfile.sessionActive
+                      ? const Color(0xFFFFF2F2)
+                      : isPending
+                          ? const Color(0xFFFFF3D0)
+                          : const Color(0xFFECEFF1),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
-                  isPending ? 'Status: Pending Approval' : 'Status: Inactive',
+                  currentProfile.sessionActive
+                      ? 'Status: Active Session (Locked)'
+                      : isPending
+                          ? 'Status: Pending Approval'
+                          : 'Status: Inactive',
                   style: GoogleFonts.montserrat(
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
-                    color: isPending
-                        ? const Color(0xFF8B6C1C)
-                        : Colors.grey[700],
+                    color: currentProfile.sessionActive
+                        ? const Color(0xFFD32F2F)
+                        : isPending
+                            ? const Color(0xFF8B6C1C)
+                            : Colors.grey[700],
                   ),
                 ),
               ),
@@ -824,38 +949,203 @@ class _DeviceVerificationScreenState
           ),
         ),
         const SizedBox(height: 32),
-        if (isPending)
+        if (currentProfile.sessionActive) ...[
+          // Session Active Warning Card
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: const Color(0xFFE8F5E9),
+              color: const Color(0xFFFFF2F2),
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: const Color(0xFFC8E6C9)),
+              border: Border.all(color: const Color(0xFFF8D7DA)),
             ),
             child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Icon(
-                  Icons.check_circle_outline_rounded,
-                  color: Color(0xFF2E7D32),
+                  Icons.gpp_bad_rounded,
+                  color: Color(0xFFD32F2F),
                   size: 24,
                 ),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: Text(
-                    'Access request sent! Please wait for Admin approval to login.',
-                    style: GoogleFonts.montserrat(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w500,
-                      color: const Color(0xFF2E7D32),
-                      height: 1.4,
-                    ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Session Lock Active',
+                        style: GoogleFonts.montserrat(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: const Color(0xFFD32F2F),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'This profile is currently logged in on another device. For security reasons, other users cannot request access to this profile.',
+                        style: GoogleFonts.montserrat(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                          color: const Color(0xFF7A1C1C),
+                          height: 1.4,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
             ),
-          )
-        else
+          ),
+          const SizedBox(height: 24),
+          SizedBox(
+            width: double.infinity,
+            height: 56,
+            child: ElevatedButton(
+              onPressed: null,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.grey[300],
+                disabledBackgroundColor: Colors.grey[200],
+                disabledForegroundColor: Colors.grey[500],
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(28),
+                ),
+                elevation: 0,
+              ),
+              child: Text(
+                'Request Blocked',
+                style: GoogleFonts.montserrat(
+                  fontSize: 15,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ),
+        ] else if (isPending) ...[
+          // Pending request countdown timer panel
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFFDF5),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: const Color(0xFFF9E8B9)),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFFD4B13B).withValues(alpha: 0.04),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Column(
+              children: [
+                Row(
+                  children: [
+                    const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFD4B13B)),
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Text(
+                        'Access request sent! Please wait for Admin approval to login.',
+                        style: GoogleFonts.montserrat(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: const Color(0xFF8B6C1C),
+                          height: 1.4,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                const Divider(color: Color(0xFFF9E8B9)),
+                const SizedBox(height: 12),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Time remaining:',
+                      style: GoogleFonts.montserrat(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                        color: Colors.grey[600],
+                      ),
+                    ),
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.timer_outlined,
+                          size: 18,
+                          color: _remainingSeconds <= 10
+                              ? const Color(0xFFD32F2F)
+                              : const Color(0xFFD4B13B),
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          '$_remainingSeconds seconds',
+                          style: GoogleFonts.montserrat(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                            color: _remainingSeconds <= 10
+                                ? const Color(0xFFD32F2F)
+                                : const Color(0xFF8B6C1C),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(4),
+                  child: LinearProgressIndicator(
+                    value: _remainingSeconds / 30.0,
+                    backgroundColor: const Color(0xFFF4EDE4),
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      _remainingSeconds <= 10
+                          ? const Color(0xFFD32F2F)
+                          : const Color(0xFFD4B13B),
+                    ),
+                    minHeight: 6,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+          SizedBox(
+            width: double.infinity,
+            height: 56,
+            child: OutlinedButton(
+              onPressed: () {
+                _stopTimers();
+                setState(() {
+                  _selectedProfile = null;
+                });
+              },
+              style: OutlinedButton.styleFrom(
+                side: const BorderSide(color: Color(0xFFD4B13B), width: 1.5),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(28),
+                ),
+              ),
+              child: Text(
+                'Cancel Request',
+                style: GoogleFonts.montserrat(
+                  fontSize: 15,
+                  fontWeight: FontWeight.bold,
+                  color: const Color(0xFF8B6C1C),
+                ),
+              ),
+            ),
+          ),
+        ] else
           SizedBox(
             width: double.infinity,
             height: 56,
@@ -866,7 +1156,7 @@ class _DeviceVerificationScreenState
                       final success = await ref
                           .read(userProfilesNotifierProvider.notifier)
                           .sendAccessRequest(currentProfile.id);
-                      if (success && context.mounted) {
+                      if (success && mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
                             content: Text(
@@ -877,7 +1167,7 @@ class _DeviceVerificationScreenState
                             behavior: SnackBarBehavior.floating,
                           ),
                         );
-                      } else if (context.mounted) {
+                      } else if (mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
                             content: Text(
