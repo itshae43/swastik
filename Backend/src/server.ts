@@ -21,6 +21,16 @@ const MONGO_URI = process.env.MONGO_URI || '';
 app.use(cors());
 app.use(express.json());
 
+// Server-Sent Events (SSE) clients
+let sseClients: Response[] = [];
+
+// Helper to broadcast profile updates
+function broadcastProfilesUpdated() {
+  sseClients.forEach(client => {
+    client.write('event: profiles_updated\ndata: {}\n\n');
+  });
+}
+
 // In-Memory/Local Admin records as fallback if MongoDB is not connected
 let isMongoConnected = false;
 let fallbackAdmins: any[] = [];
@@ -459,6 +469,7 @@ app.post('/api/user-profiles/:id/request-access', async (req: Request, res: Resp
       }, 30000);
 
       res.json(updated);
+      broadcastProfilesUpdated();
     } else {
       const profile = fallbackUserProfiles.find((p) => p._id === id);
       if (!profile) {
@@ -487,6 +498,7 @@ app.post('/api/user-profiles/:id/request-access', async (req: Request, res: Resp
       }, 30000);
 
       res.json(profile);
+      broadcastProfilesUpdated();
     }
   } catch (err: any) {
     res.status(400).json({ error: err.message });
@@ -525,6 +537,7 @@ app.post('/api/user-profiles/:id/approve', async (req: Request, res: Response) =
       const updated = await profile.save();
       console.log(`[ACCESS REQUEST APPROVED] Profile ${profile.name} (DB) approved by Admin. Expires at ${expiresAt}`);
       res.json(updated);
+      broadcastProfilesUpdated();
     } else {
       const profile = fallbackUserProfiles.find((p) => p._id === id);
       if (!profile) {
@@ -553,6 +566,7 @@ app.post('/api/user-profiles/:id/approve', async (req: Request, res: Response) =
       profile.updatedAt = new Date();
       console.log(`[ACCESS REQUEST APPROVED] Profile ${profile.name} (In-Memory) approved by Admin. Expires at ${expiresAt}`);
       res.json(profile);
+      broadcastProfilesUpdated();
     }
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -574,6 +588,7 @@ app.post('/api/user-profiles/:id/decline', async (req: Request, res: Response) =
       const updated = await profile.save();
       console.log(`[ACCESS REQUEST DECLINED] Profile ${profile.name} (DB) declined by Admin.`);
       res.json(updated);
+      broadcastProfilesUpdated();
     } else {
       const profile = fallbackUserProfiles.find((p) => p._id === id);
       if (!profile) {
@@ -586,6 +601,7 @@ app.post('/api/user-profiles/:id/decline', async (req: Request, res: Response) =
       profile.updatedAt = new Date();
       console.log(`[ACCESS REQUEST DECLINED] Profile ${profile.name} (In-Memory) declined by Admin.`);
       res.json(profile);
+      broadcastProfilesUpdated();
     }
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -703,6 +719,22 @@ app.get('/api/health', (req, res) => {
     status: 'ok',
     database: isMongoConnected ? 'connected' : 'fallback_in_memory',
     fallbackActive: !isMongoConnected,
+  });
+});
+
+// SSE Endpoint
+app.get('/api/events', (req: Request, res: Response) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+
+  // Initial connection event
+  res.write('data: connected\n\n');
+
+  sseClients.push(res);
+
+  req.on('close', () => {
+    sseClients = sseClients.filter(client => client !== res);
   });
 });
 
