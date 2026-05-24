@@ -2,6 +2,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 import '../models/reminder_model.dart';
+import '../utils/time_utils.dart';
 import 'dart:io';
 
 class NotificationService {
@@ -41,7 +42,8 @@ class NotificationService {
 
   Future<void> scheduleReminderNotification(ReminderModel reminder) async {
     final kolkata = tz.getLocation('Asia/Kolkata');
-    final scheduledDate = tz.TZDateTime.from(reminder.date, kolkata);
+    final realDate = TimeUtils.toRealWorld(reminder.date);
+    final scheduledDate = tz.TZDateTime.from(realDate, kolkata);
 
     if (scheduledDate.isBefore(tz.TZDateTime.now(kolkata))) return;
 

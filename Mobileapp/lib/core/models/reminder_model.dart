@@ -1,3 +1,5 @@
+import '../utils/time_utils.dart';
+
 enum ReminderStatus { upcoming, overdue, completed }
 
 class ReminderModel {
@@ -31,12 +33,12 @@ class ReminderModel {
       partyPhone: map['partyPhone'] as String? ?? '',
       title: map['title'] as String? ?? '',
       note: map['note'] as String? ?? '',
-      date: map['date'] != null ? DateTime.parse(map['date']).toLocal() : DateTime.now(),
+      date: map['date'] != null ? TimeUtils.to2007(DateTime.parse(map['date']).toLocal()) : TimeUtils.now,
       status: ReminderStatus.values.firstWhere(
         (e) => e.name == map['status'],
         orElse: () => ReminderStatus.upcoming,
       ),
-      createdAt: map['createdAt'] != null ? DateTime.parse(map['createdAt']).toLocal() : DateTime.now(),
+      createdAt: map['createdAt'] != null ? TimeUtils.to2007(DateTime.parse(map['createdAt']).toLocal()) : TimeUtils.now,
     );
   }
 

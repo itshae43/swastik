@@ -1,3 +1,5 @@
+import '../utils/time_utils.dart';
+
 class PartyModel {
   final String id;
   final String name;
@@ -52,8 +54,8 @@ class PartyModel {
       openingCashBalance: (map['openingCashBalance'] as num?)?.toDouble() ?? cash,
       openingGoldBalanceGrams: (map['openingGoldBalanceGrams'] as num?)?.toDouble() ?? gold,
       openingDiamondBalanceCarats: (map['openingDiamondBalanceCarats'] as num?)?.toDouble() ?? diamond,
-      createdAt: map['createdAt'] != null ? DateTime.parse(map['createdAt']) : DateTime.now(),
-      updatedAt: map['updatedAt'] != null ? DateTime.parse(map['updatedAt']) : DateTime.now(),
+      createdAt: map['createdAt'] != null ? TimeUtils.to2007(DateTime.parse(map['createdAt'])) : TimeUtils.now,
+      updatedAt: map['updatedAt'] != null ? TimeUtils.to2007(DateTime.parse(map['updatedAt'])) : TimeUtils.now,
     );
   }
 

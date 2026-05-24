@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../models/transaction_model.dart';
 import '../models/party_model.dart';
+import '../utils/time_utils.dart';
 
 import 'package:swastik_mobile_app/core/utils/constants.dart';
 
@@ -50,7 +51,7 @@ class TransactionService {
             cashBalance: cashBalance,
             goldBalanceGrams: goldBalance,
             diamondBalanceCarats: diamondBalance,
-            updatedAt: DateTime.now(),
+            updatedAt: TimeUtils.now,
           );
 
           await http.put(

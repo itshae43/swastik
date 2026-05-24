@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:swastik_mobile_app/core/models/party_model.dart';
 import 'package:swastik_mobile_app/core/models/transaction_model.dart';
 import 'package:swastik_mobile_app/core/utils/responsive_utils.dart';
+import 'package:swastik_mobile_app/core/utils/time_utils.dart';
 import 'package:swastik_mobile_app/features/ledger/providers/transaction_providers.dart';
 import 'package:swastik_mobile_app/features/parties/providers/party_providers.dart';
 import 'package:swastik_mobile_app/features/parties/presentation/widgets/quick_add_party_bottom_sheet.dart';
@@ -16,6 +17,7 @@ import 'package:swastik_mobile_app/features/settings/providers/profile_providers
 import 'package:swastik_mobile_app/features/auth/providers/user_profiles_provider.dart';
 import 'package:swastik_mobile_app/features/auth/providers/auth_providers.dart';
 import 'package:swastik_mobile_app/features/settings/presentation/screens/device_management_screen.dart';
+import 'package:swastik_mobile_app/core/services/pdf_service.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -107,7 +109,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   /// Applies date filtering to a list of transactions based on
   /// the current [_selectedTableFilter] and [_customFilterResult].
   List<TransactionModel> _applyDateFilter(List<TransactionModel> transactions) {
-    final now = DateTime.now();
+    final now = TimeUtils.now;
     return transactions.where((t) {
       if (_selectedTableFilter == 'Today') {
         return t.date.year == now.year &&
@@ -243,7 +245,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     required String gold,
     required String diamond,
   }) {
-    final dateStr = DateFormat('EEEE, d MMMM').format(DateTime.now());
+    final dateStr = DateFormat('EEEE, d MMMM yyyy').format(TimeUtils.now);
 
     return GestureDetector(
       onTap: () {
@@ -784,7 +786,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           _showPrintStatementDialog(
                             context,
                             filtered,
-                            'SwarnKhata Statement',
+                            'Statement',
                             'Period: $_filterDisplayLabel',
                           );
                         },
@@ -1019,11 +1021,25 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       // Category Pill using Transaction Type / Badge specs
                       Widget categoryPill;
                       if (t.metalType.isEmpty) {
-                        categoryPill = _buildCategoryPill(
-                          'Cash',
-                          const Color(0xFFE8F8F0),
-                          const Color(0xFF00994C),
-                        );
+                        if (t.paymentMode == PaymentMode.upi || t.paymentMode == PaymentMode.online) {
+                          categoryPill = _buildCategoryPill(
+                            'UPI',
+                            const Color(0xFFE0F7FA),
+                            const Color(0xFF00838F),
+                          );
+                        } else if (t.paymentMode == PaymentMode.rtgs) {
+                          categoryPill = _buildCategoryPill(
+                            'RTGS',
+                            const Color(0xFFF3E5F5),
+                            const Color(0xFF6A1B9A),
+                          );
+                        } else {
+                          categoryPill = _buildCategoryPill(
+                            'Cash',
+                            const Color(0xFFE8F8F0),
+                            const Color(0xFF00994C),
+                          );
+                        }
                       } else if (t.metalType == 'gold') {
                         categoryPill = _buildCategoryPill(
                           'Gold',
@@ -1243,22 +1259,45 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                             // NOTES Column (Styled with Secondary Details Spec)
                             Expanded(
                               flex: notesFlex,
-                              child: Text(
-                                t.notes != null && t.notes!.trim().isNotEmpty
-                                    ? t.notes!
-                                    : '-',
-                                style: GoogleFonts.montserrat(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w400,
-                                  height: 18 / 13,
-                                  letterSpacing: 0,
-                                  color: Colors.black54,
-                                ),
-                                maxLines: isPortrait ? null : 1,
-                                overflow: isPortrait
-                                    ? null
-                                    : TextOverflow.ellipsis,
-                                softWrap: true,
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      t.notes != null && t.notes!.trim().isNotEmpty
+                                          ? t.notes!
+                                          : '-',
+                                      style: GoogleFonts.montserrat(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w400,
+                                        height: 18 / 13,
+                                        letterSpacing: 0,
+                                        color: Colors.black54,
+                                      ),
+                                      maxLines: isPortrait ? null : 1,
+                                      overflow: isPortrait
+                                          ? null
+                                          : TextOverflow.ellipsis,
+                                      softWrap: true,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  GestureDetector(
+                                    onTap: () => _showPrintReceiptDialog(context, t, amountStr, t.typeLabel),
+                                    child: Container(
+                                      padding: const EdgeInsets.all(6),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFFAF6EE),
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(color: const Color(0xFFE5DEC9), width: 1.0),
+                                      ),
+                                      child: const Icon(
+                                        Icons.print_rounded,
+                                        size: 14,
+                                        color: Color(0xFF735C0F),
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                           ],
@@ -1711,7 +1750,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 _showPrintStatementDialog(
                   context,
                   filteredTransactions,
-                  'SwarnKhata Statement',
+                  'Statement',
                   'Period: $_filterDisplayLabel',
                 );
               },
@@ -1896,13 +1935,35 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                       ),
                                     ),
                                     const SizedBox(height: 2),
-                                    Text(
-                                      middleRightLabel,
-                                      style: GoogleFonts.montserrat(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.bold,
-                                        color: color,
-                                      ),
+                                    Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(
+                                          middleRightLabel,
+                                          style: GoogleFonts.montserrat(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.bold,
+                                            color: color,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        GestureDetector(
+                                          onTap: () => _showPrintReceiptDialog(context, activity, middleRightLabel, activity.typeLabel),
+                                          child: Container(
+                                            padding: const EdgeInsets.all(5),
+                                            decoration: BoxDecoration(
+                                              color: const Color(0xFFFAF6EE),
+                                              borderRadius: BorderRadius.circular(6),
+                                              border: Border.all(color: const Color(0xFFE5DEC9), width: 0.5),
+                                            ),
+                                            child: const Icon(
+                                              Icons.print_rounded,
+                                              size: 13,
+                                              color: Color(0xFF735C0F),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                     const SizedBox(height: 2),
                                     Text(
@@ -2055,7 +2116,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                             ),
                             const SizedBox(height: 8),
                             Text(
-                              'PDF saved to Documents/SwarnKhata/Statements',
+                              'PDF saved to Downloads folder',
                               style: GoogleFonts.montserrat(
                                 fontSize: 12,
                                 color: Colors.grey[600],
@@ -2093,6 +2154,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                 Center(
                                   child: Column(
                                     children: [
+                                      Image.asset(
+                                        'assets/images/logo.png',
+                                        height: 40,
+                                      ),
+                                      const SizedBox(height: 6),
                                       Text(
                                         'SWASTIK JEWELS',
                                         style: GoogleFonts.montserrat(
@@ -2228,16 +2294,26 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           children: [
                             Expanded(
                               child: OutlinedButton.icon(
-                                onPressed: () {
+                                onPressed: () async {
                                   setDialogState(() {
                                     isPrinting = true;
                                   });
-                                  Future.delayed(const Duration(seconds: 2), () {
+                                  try {
+                                    final pdfBytes = await PdfService.generateStatementPdf(
+                                      transactions: txns,
+                                      title: title,
+                                      subtitle: subtitle,
+                                    );
+                                    await PdfService.printPdf(pdfBytes);
+                                    Navigator.pop(context);
+                                  } catch (e) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(content: Text('Error printing: $e')),
+                                    );
                                     setDialogState(() {
                                       isPrinting = false;
-                                      isSaved = true;
                                     });
-                                  });
+                                  }
                                 },
                                 icon: const Icon(Icons.print_rounded, size: 18, color: Color(0xFF01565B)),
                                 label: Text(
@@ -2260,16 +2336,457 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                             const SizedBox(width: 12),
                             Expanded(
                               child: ElevatedButton.icon(
-                                onPressed: () {
+                                onPressed: () async {
                                   setDialogState(() {
                                     isPrinting = true;
                                   });
-                                  Future.delayed(const Duration(seconds: 1), () {
+                                  try {
+                                    final pdfBytes = await PdfService.generateStatementPdf(
+                                      transactions: txns,
+                                      title: title,
+                                      subtitle: subtitle,
+                                    );
+                                    final success = await PdfService.savePdfToDownloads(
+                                      pdfBytes,
+                                      'Statement_${DateTime.now().millisecondsSinceEpoch}',
+                                    );
                                     setDialogState(() {
                                       isPrinting = false;
-                                      isSaved = true;
+                                      isSaved = success;
                                     });
+                                  } catch (e) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(content: Text('Error saving PDF: $e')),
+                                    );
+                                    setDialogState(() {
+                                      isPrinting = false;
+                                    });
+                                  }
+                                },
+                                icon: const Icon(Icons.picture_as_pdf, size: 18, color: Colors.white),
+                                label: Text(
+                                  'Save PDF',
+                                  style: GoogleFonts.montserrat(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF01565B),
+                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildReceiptRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 100,
+            child: Text(
+              label,
+              style: GoogleFonts.montserrat(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: Colors.grey[700],
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: GoogleFonts.montserrat(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: Colors.black87,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showPrintReceiptDialog(
+    BuildContext context,
+    TransactionModel t,
+    String amountStr,
+    String badgeText,
+  ) {
+    final isCredit = t.type == TransactionType.receipt || t.type == TransactionType.metalIn;
+    final dateStr = DateFormat('dd MMM yyyy').format(t.date);
+    final timeStr = DateFormat('hh:mm a').format(t.date);
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        bool isPrinting = false;
+        bool isSaved = false;
+
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return Dialog(
+              backgroundColor: Colors.transparent,
+              child: Container(
+                constraints: const BoxConstraints(maxWidth: 420),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFAF6EE),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: const Color(0xFFDFBA6B), width: 1.5),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.15),
+                      blurRadius: 25,
+                      offset: const Offset(0, 10),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Header of dialog
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                      decoration: const BoxDecoration(
+                        color: Color(0xFF01565B),
+                        borderRadius: BorderRadius.only(
+                          topLeft: Radius.circular(18),
+                          topRight: Radius.circular(18),
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'Receipt Print Preview',
+                            style: GoogleFonts.montserrat(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.close, color: Colors.white, size: 20),
+                            onPressed: () => Navigator.pop(context),
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    if (isPrinting)
+                      Container(
+                        height: 320,
+                        alignment: Alignment.center,
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const CircularProgressIndicator(color: Color(0xFF01565B)),
+                            const SizedBox(height: 20),
+                            Text(
+                              'Connecting to printer...',
+                              style: GoogleFonts.montserrat(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: const Color(0xFF5E543F),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Sending receipt to Thermal Printer...',
+                              style: GoogleFonts.montserrat(
+                                fontSize: 12,
+                                color: Colors.grey[600],
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    else if (isSaved)
+                      Container(
+                        height: 320,
+                        alignment: Alignment.center,
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(16),
+                              decoration: const BoxDecoration(
+                                color: Color(0xFFE8F8F0),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.check_circle_rounded,
+                                color: Color(0xFF01565B),
+                                size: 48,
+                              ),
+                            ),
+                            const SizedBox(height: 20),
+                            Text(
+                              'Receipt Saved!',
+                              style: GoogleFonts.montserrat(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: const Color(0xFF01565B),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'PDF saved to Downloads folder',
+                              style: GoogleFonts.montserrat(
+                                fontSize: 12,
+                                color: Colors.grey[600],
+                              ),
+                            ),
+                            const SizedBox(height: 24),
+                            ElevatedButton(
+                              onPressed: () => Navigator.pop(context),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF01565B),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                              ),
+                              child: Text(
+                                'Done',
+                                style: GoogleFonts.montserrat(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    else ...[
+                      // Simulated Thermal Receipt
+                      Padding(
+                        padding: const EdgeInsets.all(20.0),
+                        child: Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.grey.withOpacity(0.2)),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.02),
+                                blurRadius: 8,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              // Store details
+                              Center(
+                                child: Column(
+                                  children: [
+                                    Image.asset(
+                                      'assets/images/logo.png',
+                                      height: 40,
+                                    ),
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      'SWASTIK JEWELS',
+                                      style: GoogleFonts.montserrat(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.bold,
+                                        color: const Color(0xFF735C0F),
+                                        letterSpacing: 1.0,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      '------------------------------------------',
+                                      style: TextStyle(color: Colors.grey[400]),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+
+                              // Receipt Metadata
+                              _buildReceiptRow('Date:', '$dateStr  $timeStr'),
+                              _buildReceiptRow('Customer Name:', t.partyName),
+                              _buildReceiptRow('Type:', isCredit ? 'IN' : 'OUT'),
+                              _buildReceiptRow('Category:', t.metalType.isEmpty ? 'Money' : t.metalType.toUpperCase()),
+                              if (badgeText.isNotEmpty)
+                                _buildReceiptRow('Particulars:', badgeText),
+
+                              Text(
+                                '------------------------------------------',
+                                style: TextStyle(color: Colors.grey[400]),
+                              ),
+                              const SizedBox(height: 8),
+
+                              // Amount / Details Highlight
+                              Container(
+                                padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFFAF6EE),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: const Color(0xFFE5DEC9)),
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text(
+                                      'TOTAL AMOUNT:',
+                                      style: GoogleFonts.montserrat(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.bold,
+                                        color: const Color(0xFF5E543F),
+                                      ),
+                                    ),
+                                    Text(
+                                      amountStr,
+                                      style: GoogleFonts.montserrat(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                        color: isCredit ? const Color(0xFF01565B) : const Color(0xFFC62828),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              if (t.notes.isNotEmpty) ...[
+                                const SizedBox(height: 8),
+                                Text(
+                                  'Notes: "${t.notes}"',
+                                  style: GoogleFonts.montserrat(
+                                    fontSize: 11,
+                                    color: Colors.grey[600],
+                                    fontStyle: FontStyle.italic,
+                                  ),
+                                ),
+                              ],
+                              const SizedBox(height: 16),
+
+                              // Barcode placeholder
+                              Center(
+                                child: Column(
+                                  children: [
+                                    Icon(Icons.bar_chart_rounded, size: 40, color: Colors.grey[600]),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      'Thank you for your business!',
+                                      style: GoogleFonts.montserrat(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w500,
+                                        color: Colors.grey[500],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+
+                      // Print Dialog Actions
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: OutlinedButton.icon(
+                                onPressed: () async {
+                                  setDialogState(() {
+                                    isPrinting = true;
                                   });
+                                  try {
+                                    final pdfBytes = await PdfService.generateReceiptPdf(
+                                      transaction: t,
+                                      amountStr: amountStr,
+                                      badgeText: badgeText,
+                                    );
+                                    await PdfService.printPdf(pdfBytes);
+                                    if (context.mounted) Navigator.pop(context);
+                                  } catch (e) {
+                                    if (context.mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(content: Text('Error printing: $e')),
+                                      );
+                                    }
+                                    setDialogState(() {
+                                      isPrinting = false;
+                                    });
+                                  }
+                                },
+                                icon: const Icon(Icons.print_rounded, size: 18, color: Color(0xFF01565B)),
+                                label: Text(
+                                  'Print',
+                                  style: GoogleFonts.montserrat(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.bold,
+                                    color: const Color(0xFF01565B),
+                                  ),
+                                ),
+                                style: OutlinedButton.styleFrom(
+                                  side: const BorderSide(color: Color(0xFF01565B), width: 1.5),
+                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: ElevatedButton.icon(
+                                onPressed: () async {
+                                  setDialogState(() {
+                                    isPrinting = true;
+                                  });
+                                  try {
+                                    final pdfBytes = await PdfService.generateReceiptPdf(
+                                      transaction: t,
+                                      amountStr: amountStr,
+                                      badgeText: badgeText,
+                                    );
+                                    final success = await PdfService.savePdfToDownloads(
+                                      pdfBytes,
+                                      'Receipt_${t.partyName.replaceAll(' ', '_')}_${DateFormat('ddMMMyyyy').format(t.date)}',
+                                    );
+                                    setDialogState(() {
+                                      isPrinting = false;
+                                      isSaved = success;
+                                    });
+                                  } catch (e) {
+                                    if (context.mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(content: Text('Error saving PDF: $e')),
+                                      );
+                                    }
+                                    setDialogState(() {
+                                      isPrinting = false;
+                                    });
+                                  }
                                 },
                                 icon: const Icon(Icons.picture_as_pdf, size: 18, color: Colors.white),
                                 label: Text(
@@ -2322,7 +2839,7 @@ class _TabletQuickAddEntryDialogState
   String _transactionType = 'IN';
   String _category = 'Money'; // Money, Gold, Diamond
   String _paymentMode = 'Cash'; // Cash, UPI, RTGS
-  DateTime _selectedDate = DateTime.now();
+  DateTime _selectedDate = TimeUtils.now;
   TimeOfDay _selectedTime = TimeOfDay.now();
 
   final TextEditingController _amountController = TextEditingController();
@@ -3520,7 +4037,6 @@ class _TabletQuickAddEntryDialogState
     }
   }
 
-
 }
 
 class _IndianCurrencyFormatter extends TextInputFormatter {
@@ -3552,3 +4068,4 @@ class _IndianCurrencyFormatter extends TextInputFormatter {
     }
   }
 }
+

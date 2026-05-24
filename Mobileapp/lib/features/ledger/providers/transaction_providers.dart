@@ -3,6 +3,7 @@ import 'package:swastik_mobile_app/core/models/transaction_model.dart';
 import 'package:swastik_mobile_app/core/services/transaction_service.dart';
 import 'package:swastik_mobile_app/features/auth/providers/auth_providers.dart';
 import 'package:swastik_mobile_app/core/utils/constants.dart';
+import 'package:swastik_mobile_app/core/utils/time_utils.dart';
 
 final transactionServiceProvider = Provider<TransactionService>((ref) => TransactionService());
 
@@ -13,6 +14,7 @@ final transactionsStreamProvider = StreamProvider<List<TransactionModel>>((ref) 
 final partyTransactionsStreamProvider = StreamProvider.family<List<TransactionModel>, String>((ref, partyId) {
   return ref.watch(transactionServiceProvider).partyTransactionsStream(AppConstants.centralDbId, partyId);
 });
+
 
 class TransactionState {
   final bool isLoading;
@@ -62,7 +64,7 @@ class TransactionNotifier extends Notifier<TransactionState> {
 
     state = state.copyWith(isLoading: true, clearError: true);
     try {
-      final now = DateTime.now();
+      final now = TimeUtils.now;
       final transaction = TransactionModel(
         id: '', 
         partyId: partyId,

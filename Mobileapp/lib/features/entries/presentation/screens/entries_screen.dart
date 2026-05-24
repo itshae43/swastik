@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:swastik_mobile_app/core/utils/time_utils.dart';
 
 import 'package:swastik_mobile_app/core/models/party_model.dart';
 import 'package:swastik_mobile_app/core/models/transaction_model.dart';
@@ -23,8 +25,8 @@ class _EntriesScreenState extends ConsumerState<EntriesScreen> {
   String _transactionType = 'IN';
   String _category = 'Money'; // Money, Gold, Diamond
   String _paymentMode = 'Cash'; // Cash, UPI, RTGS
-  DateTime _selectedDate = DateTime.now();
-  TimeOfDay _selectedTime = TimeOfDay.now();
+  DateTime _selectedDate = TimeUtils.now;
+  TimeOfDay _selectedTime = TimeOfDay.fromDateTime(TimeUtils.now);
   final TextEditingController _amountController = TextEditingController();
   final TextEditingController _partyController = TextEditingController();
   final TextEditingController _notesController = TextEditingController();
@@ -36,8 +38,30 @@ class _EntriesScreenState extends ConsumerState<EntriesScreen> {
   PartyModel? _selectedParty;
   String? _pendingPartyId;
 
+  Timer? _clockTimer;
+  bool _isTimeManuallySet = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedDate = TimeUtils.now;
+    _selectedTime = TimeOfDay.fromDateTime(TimeUtils.now);
+
+    // Set up a 1-second periodic timer to tick the synced server clock live in the UI
+    _clockTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!_isTimeManuallySet && mounted) {
+        setState(() {
+          final now = TimeUtils.now;
+          _selectedDate = now;
+          _selectedTime = TimeOfDay.fromDateTime(now);
+        });
+      }
+    });
+  }
+
   @override
   void dispose() {
+    _clockTimer?.cancel();
     _amountController.dispose();
     _partyController.dispose();
     _notesController.dispose();
@@ -145,7 +169,10 @@ class _EntriesScreenState extends ConsumerState<EntriesScreen> {
                             lastDate: DateTime(2100),
                           );
                           if (picked != null) {
-                            setState(() => _selectedDate = picked);
+                            setState(() {
+                              _selectedDate = picked;
+                              _isTimeManuallySet = true;
+                            });
                           }
                         },
                       ),
@@ -159,7 +186,10 @@ class _EntriesScreenState extends ConsumerState<EntriesScreen> {
                             initialTime: _selectedTime,
                           );
                           if (picked != null) {
-                            setState(() => _selectedTime = picked);
+                            setState(() {
+                              _selectedTime = picked;
+                              _isTimeManuallySet = true;
+                            });
                           }
                         },
                       ),
@@ -830,6 +860,7 @@ class _EntriesScreenState extends ConsumerState<EntriesScreen> {
                         _piecesController.clear();
                         setState(() {
                           _selectedParty = null;
+                          _isTimeManuallySet = false;
                         });
                       },
                       style: TextButton.styleFrom(
@@ -956,6 +987,7 @@ class _EntriesScreenState extends ConsumerState<EntriesScreen> {
                           _piecesController.clear();
                           setState(() {
                             _selectedParty = null;
+                            _isTimeManuallySet = false;
                           });
 
                           ScaffoldMessenger.of(context).showSnackBar(

@@ -9,6 +9,7 @@ import 'package:swastik_mobile_app/features/reminders/providers/reminder_provide
 import 'package:swastik_mobile_app/core/models/reminder_model.dart';
 import 'package:swastik_mobile_app/core/utils/communication_utils.dart';
 import 'package:swastik_mobile_app/core/utils/responsive_utils.dart';
+import 'package:swastik_mobile_app/core/utils/time_utils.dart';
 import 'package:intl/intl.dart';
 
 // ──────────────────────────── DATA MODELS ────────────────────────────
@@ -130,12 +131,35 @@ class _PartyDetailScreenState extends ConsumerState<PartyDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final isTablet = AppResponsive.isTablet(context);
+    final partiesAsync = ref.watch(partiesStreamProvider);
+    final parties = partiesAsync.value ?? [];
+    final partyModel = parties.firstWhere(
+      (p) => p.id == widget.party.id,
+      orElse: () => PartyModel(
+        id: widget.party.id,
+        name: widget.party.name,
+        type: widget.party.type,
+        phone: widget.party.phone,
+        email: '',
+        address: widget.party.location,
+        cashBalance: 0.0,
+        goldBalanceGrams: 0.0,
+        silverBalanceGrams: 0.0,
+        diamondBalanceCarats: 0.0,
+        openingCashBalance: 0.0,
+        openingGoldBalanceGrams: 0.0,
+        openingDiamondBalanceCarats: 0.0,
+        createdAt: TimeUtils.now,
+        updatedAt: TimeUtils.now,
+      ),
+    );
+
     return Scaffold(
       backgroundColor: isTablet ? const Color(0xFFFAF6EE) : const Color(0xFFFDFBF7),
       body: SafeArea(
         child: Column(
           children: [
-            _buildAppBar(),
+            _buildAppBar(partyModel),
             Expanded(
               child: SingleChildScrollView(
                 physics: const BouncingScrollPhysics(),
@@ -143,7 +167,7 @@ class _PartyDetailScreenState extends ConsumerState<PartyDetailScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const SizedBox(height: 12),
-                    _buildDueSummaryCards(),
+                    _buildDueSummaryCards(partyModel),
                     const SizedBox(height: 20),
                     _buildTabs(),
                     const SizedBox(height: 20),
@@ -168,7 +192,10 @@ class _PartyDetailScreenState extends ConsumerState<PartyDetailScreen> {
   }
 
   // ─── APP BAR ─────────────────────────────────────────────────
-  Widget _buildAppBar() {
+  Widget _buildAppBar(PartyModel partyModel) {
+    final liveLocation = partyModel.address.isNotEmpty 
+        ? partyModel.address.split(',').last.trim() 
+        : 'India';
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
       child: Row(
@@ -184,7 +211,7 @@ class _PartyDetailScreenState extends ConsumerState<PartyDetailScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  widget.party.name,
+                  partyModel.name,
                   style: GoogleFonts.montserrat(
                     fontSize: 17,
                     fontWeight: FontWeight.bold,
@@ -195,7 +222,7 @@ class _PartyDetailScreenState extends ConsumerState<PartyDetailScreen> {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  '${widget.party.type} • ${widget.party.location}${widget.party.phone.isNotEmpty ? ' • ${widget.party.phone}' : ''}',
+                  '${partyModel.type} • $liveLocation${partyModel.phone.isNotEmpty ? ' • ${partyModel.phone}' : ''}',
                   style: GoogleFonts.montserrat(
                     fontSize: 13,
                     color: Colors.grey[600],
@@ -218,7 +245,7 @@ class _PartyDetailScreenState extends ConsumerState<PartyDetailScreen> {
           ),
           IconButton(
             onPressed: () {
-              _showMoreOptions(context);
+              _showMoreOptions(context, partyModel);
             },
             icon: const Icon(Icons.more_vert, color: Color(0xFF1E1E1E), size: 24),
             splashRadius: 24,
@@ -228,7 +255,7 @@ class _PartyDetailScreenState extends ConsumerState<PartyDetailScreen> {
     );
   }
 
-  void _showMoreOptions(BuildContext context) {
+  void _showMoreOptions(BuildContext context, PartyModel partyModel) {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.white,
@@ -251,10 +278,58 @@ class _PartyDetailScreenState extends ConsumerState<PartyDetailScreen> {
                   ),
                 ),
                 const SizedBox(height: 16),
-                _buildOptionTile(Icons.edit_outlined, 'Edit Party Details'),
+                _buildOptionTile(
+                  Icons.edit_outlined,
+                  'Edit Party Details',
+                  onTap: () {
+                    Navigator.pop(context);
+                    _showEditPartyBottomSheet(context, partyModel);
+                  },
+                ),
                 _buildOptionTile(Icons.file_download_outlined, 'Download Statement'),
                 _buildOptionTile(Icons.share_outlined, 'Share Ledger'),
-                _buildOptionTile(Icons.delete_outline, 'Delete Party', isDestructive: true),
+                _buildOptionTile(
+                  Icons.delete_outline,
+                  'Delete Party',
+                  isDestructive: true,
+                  onTap: () async {
+                    Navigator.pop(context);
+                    final confirm = await showDialog<bool>(
+                      context: context,
+                      builder: (context) => AlertDialog(
+                        title: Text('Delete Party', style: GoogleFonts.montserrat(fontWeight: FontWeight.bold)),
+                        content: Text('Are you sure you want to delete ${partyModel.name}? This action cannot be undone.'),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(context, false),
+                            child: const Text('Cancel'),
+                          ),
+                          TextButton(
+                            onPressed: () => Navigator.pop(context, true),
+                            child: Text('Delete', style: TextStyle(color: Colors.red[700])),
+                          ),
+                        ],
+                      ),
+                    );
+                    if (confirm == true && mounted) {
+                      try {
+                        await ref.read(partyServiceProvider).deleteParty('', partyModel.id);
+                        if (mounted) {
+                          Navigator.pop(context); // Go back to ledger list
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Party deleted successfully')),
+                          );
+                        }
+                      } catch (e) {
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Failed to delete party: $e')),
+                          );
+                        }
+                      }
+                    }
+                  },
+                ),
               ],
             ),
           ),
@@ -263,7 +338,7 @@ class _PartyDetailScreenState extends ConsumerState<PartyDetailScreen> {
     );
   }
 
-  Widget _buildOptionTile(IconData icon, String title, {bool isDestructive = false}) {
+  Widget _buildOptionTile(IconData icon, String title, {bool isDestructive = false, VoidCallback? onTap}) {
     return ListTile(
       leading: Icon(
         icon,
@@ -277,37 +352,284 @@ class _PartyDetailScreenState extends ConsumerState<PartyDetailScreen> {
           color: isDestructive ? Colors.red[700] : const Color(0xFF1E1E1E),
         ),
       ),
-      onTap: () => Navigator.pop(context),
+      onTap: onTap ?? () => Navigator.pop(context),
+    );
+  }
+
+  void _showEditPartyBottomSheet(BuildContext context, PartyModel partyModel) {
+    final nameController = TextEditingController(text: partyModel.name);
+    final phoneController = TextEditingController(text: partyModel.phone);
+    final addressController = TextEditingController(text: partyModel.address);
+    bool isSaving = false;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        final isTablet = AppResponsive.isTablet(context);
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            return Container(
+              decoration: BoxDecoration(
+                color: isTablet ? const Color(0xFFFAF6EE) : const Color(0xFFFDFBF7),
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+              ),
+              padding: EdgeInsets.only(
+                left: 20,
+                right: 20,
+                top: 24,
+                bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+              ),
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Edit Party Details',
+                          style: GoogleFonts.montserrat(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: const Color(0xFF4A3E1F),
+                          ),
+                        ),
+                        IconButton(
+                          onPressed: () => Navigator.pop(context),
+                          icon: const Icon(Icons.close, color: Colors.grey),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 24),
+                    _buildEditTextField(
+                      label: 'Full Name *',
+                      hint: 'e.g. Ramesh Jewellers',
+                      prefixIcon: Icons.person_outline,
+                      controller: nameController,
+                    ),
+                    const SizedBox(height: 16),
+                    _buildEditPhoneField(controller: phoneController),
+                    const SizedBox(height: 16),
+                    _buildEditTextField(
+                      label: 'Address',
+                      hint: 'Complete billing/shipping address',
+                      maxLines: 3,
+                      controller: addressController,
+                    ),
+                    const SizedBox(height: 32),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 56,
+                      child: ElevatedButton.icon(
+                        onPressed: isSaving ? null : () async {
+                          if (nameController.text.trim().isEmpty) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Please enter party name')),
+                            );
+                            return;
+                          }
+
+                          setSheetState(() {
+                            isSaving = true;
+                          });
+
+                          final updatedParty = partyModel.copyWith(
+                            name: nameController.text.trim(),
+                            phone: phoneController.text.trim(),
+                            address: addressController.text.trim(),
+                            updatedAt: TimeUtils.now,
+                          );
+
+                          final navigator = Navigator.of(context);
+                          final scaffoldMessenger = ScaffoldMessenger.of(context);
+
+                          try {
+                            await ref.read(partyServiceProvider).updateParty(updatedParty);
+                            navigator.pop();
+                            scaffoldMessenger.showSnackBar(
+                              const SnackBar(
+                                content: Text('Party details updated successfully'),
+                                backgroundColor: Color(0xFF4A3E1F),
+                              ),
+                            );
+                          } catch (e) {
+                            setSheetState(() {
+                              isSaving = false;
+                            });
+                            scaffoldMessenger.showSnackBar(
+                              SnackBar(content: Text('Failed to update party details: $e')),
+                            );
+                          }
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF755E0B),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          elevation: 0,
+                        ),
+                        icon: isSaving 
+                            ? const SizedBox(
+                                width: 20, 
+                                height: 20, 
+                                child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)
+                              )
+                            : const Icon(Icons.save, color: Colors.white, size: 20),
+                        label: Text(
+                          isSaving ? 'Saving...' : 'Save Changes',
+                          style: GoogleFonts.montserrat(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildEditTextField({
+    required String label,
+    required String hint,
+    IconData? prefixIcon,
+    int maxLines = 1,
+    TextEditingController? controller,
+  }) {
+    List<TextSpan> labelSpans = [];
+    if (label.contains('*')) {
+      final parts = label.split('*');
+      labelSpans.add(TextSpan(text: parts[0]));
+      labelSpans.add(const TextSpan(text: '*', style: TextStyle(color: Colors.red)));
+    } else {
+      labelSpans.add(TextSpan(text: label));
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        RichText(
+          text: TextSpan(
+            style: GoogleFonts.montserrat(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: Colors.grey[800],
+            ),
+            children: labelSpans,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: const Color(0xFFE0D8C3)),
+            color: Colors.white,
+          ),
+          child: TextField(
+            maxLines: maxLines,
+            decoration: InputDecoration(
+              hintText: hint,
+              hintStyle: GoogleFonts.montserrat(color: Colors.grey[400]),
+              border: InputBorder.none,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              prefixIcon: prefixIcon != null
+                  ? Icon(prefixIcon, color: Colors.grey[400])
+                  : null,
+            ),
+            controller: controller,
+            style: GoogleFonts.montserrat(
+              fontSize: 15,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildEditPhoneField({TextEditingController? controller}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        RichText(
+          text: TextSpan(
+            style: GoogleFonts.montserrat(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: Colors.grey[800],
+            ),
+            children: const [
+              TextSpan(text: 'Phone Number '),
+              TextSpan(text: '(Optional)', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.normal)),
+            ],
+          ),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          height: 48,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: const Color(0xFFE0D8C3)),
+            color: Colors.white,
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 60,
+                decoration: const BoxDecoration(
+                  color: Color(0xFFF2EFE8),
+                  borderRadius: BorderRadius.horizontal(left: Radius.circular(8)),
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  '+91',
+                  style: GoogleFonts.montserrat(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.grey[800],
+                  ),
+                ),
+              ),
+              Container(
+                width: 1,
+                color: const Color(0xFFE0D8C3),
+              ),
+              Expanded(
+                child: TextField(
+                  controller: controller,
+                  keyboardType: TextInputType.phone,
+                  decoration: InputDecoration(
+                    hintText: '10-digit number',
+                    hintStyle: GoogleFonts.montserrat(color: Colors.grey[400]),
+                    border: InputBorder.none,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                  ),
+                  style: GoogleFonts.montserrat(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
   // ─── DUE SUMMARY CARDS ──────────────────────────────────────
-  Widget _buildDueSummaryCards() {
+  Widget _buildDueSummaryCards(PartyModel partyModel) {
     final transactionsAsync = ref.watch(partyTransactionsStreamProvider(widget.party.id));
     final transactions = transactionsAsync.value ?? [];
-
-    final partiesAsync = ref.watch(partiesStreamProvider);
-    final parties = partiesAsync.value ?? [];
-    final partyModel = parties.firstWhere(
-      (p) => p.id == widget.party.id,
-      orElse: () => PartyModel(
-        id: widget.party.id,
-        name: widget.party.name,
-        type: widget.party.type,
-        phone: widget.party.phone,
-        email: '',
-        address: widget.party.location,
-        cashBalance: 0.0,
-        goldBalanceGrams: 0.0,
-        silverBalanceGrams: 0.0,
-        diamondBalanceCarats: 0.0,
-        openingCashBalance: 0.0,
-        openingGoldBalanceGrams: 0.0,
-        openingDiamondBalanceCarats: 0.0,
-        createdAt: DateTime.now(),
-        updatedAt: DateTime.now(),
-      ),
-    );
 
     double cashBalance = partyModel.openingCashBalance;
     double onlineBalance = 0.0;
@@ -354,7 +676,7 @@ class _PartyDetailScreenState extends ConsumerState<PartyDetailScreen> {
             cashBalance: calculatedTotalCash,
             goldBalanceGrams: goldBalance,
             diamondBalanceCarats: diamondBalance,
-            updatedAt: DateTime.now(),
+            updatedAt: TimeUtils.now,
           ),
         );
       });
@@ -757,7 +1079,7 @@ class _PartyDetailScreenState extends ConsumerState<PartyDetailScreen> {
                                     onTap: () async {
                                       final picked = await showDatePicker(
                                         context: context,
-                                        initialDate: _customDate ?? DateTime.now(),
+                                        initialDate: _customDate ?? TimeUtils.now,
                                         firstDate: DateTime(2000),
                                         lastDate: DateTime(2100),
                                         builder: (context, child) {
@@ -884,11 +1206,11 @@ class _PartyDetailScreenState extends ConsumerState<PartyDetailScreen> {
 
                                   DateTime reminderDate;
                                   if (_selectedReminderTime == 'Tomorrow') {
-                                    reminderDate = DateTime.now().add(const Duration(days: 1));
+                                    reminderDate = TimeUtils.now.add(const Duration(days: 1));
                                   } else if (_selectedReminderTime == 'In 2 days') {
-                                    reminderDate = DateTime.now().add(const Duration(days: 2));
+                                    reminderDate = TimeUtils.now.add(const Duration(days: 2));
                                   } else if (_selectedReminderTime == 'Next Week') {
-                                    reminderDate = DateTime.now().add(const Duration(days: 7));
+                                    reminderDate = TimeUtils.now.add(const Duration(days: 7));
                                   } else {
                                     if (_customDate == null) {
                                       ScaffoldMessenger.of(context).showSnackBar(
@@ -1284,8 +1606,8 @@ class _PartyDetailScreenState extends ConsumerState<PartyDetailScreen> {
                   final date = await showDatePicker(
                     context: context,
                     initialDate: selectedDate,
-                    firstDate: DateTime.now(),
-                    lastDate: DateTime.now().add(const Duration(days: 365)),
+                    firstDate: TimeUtils.now,
+                    lastDate: TimeUtils.now.add(const Duration(days: 365)),
                   );
                   if (date != null) {
                     final time = await showTimePicker(

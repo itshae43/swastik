@@ -4,6 +4,8 @@ import 'package:swastik_mobile_app/core/services/party_service.dart';
 import 'package:swastik_mobile_app/features/auth/providers/auth_providers.dart';
 import 'package:swastik_mobile_app/core/utils/constants.dart';
 
+import 'package:swastik_mobile_app/core/utils/time_utils.dart';
+
 // ─── PARTY SERVICE PROVIDER ──────────────────────────────────────────
 final partyServiceProvider = Provider<PartyService>((ref) => PartyService());
 
@@ -57,7 +59,7 @@ class PartyNotifier extends Notifier<PartyState> {
   }) async {
     state = state.copyWith(isLoading: true, clearError: true);
     try {
-      final now = DateTime.now();
+      final now = TimeUtils.now;
       final party = PartyModel(
         id: '', // Firestore will generate this
         name: name,

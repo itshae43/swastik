@@ -10,6 +10,7 @@ import 'package:swastik_mobile_app/core/utils/communication_utils.dart';
 import 'package:swastik_mobile_app/features/parties/providers/party_providers.dart';
 import 'package:swastik_mobile_app/features/ledger/providers/transaction_providers.dart';
 import '../../../parties/presentation/screens/party_detail_screen.dart';
+import 'package:swastik_mobile_app/core/services/pdf_service.dart';
 
 class LedgerScreen extends ConsumerStatefulWidget {
   const LedgerScreen({super.key});
@@ -19,9 +20,6 @@ class LedgerScreen extends ConsumerStatefulWidget {
 }
 
 class _LedgerScreenState extends ConsumerState<LedgerScreen> {
-  String _selectedFilter = 'All';
-  final List<String> _filters = ['All', 'Money', 'Diamond', 'Gold'];
-
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
 
@@ -56,46 +54,11 @@ class _LedgerScreenState extends ConsumerState<LedgerScreen> {
               );
 
             // Filter by search query
-            List<PartyModel> filteredParties = sortedParties.where((p) {
+            final List<PartyModel> filteredParties = sortedParties.where((p) {
               if (query.isEmpty) return true;
               return p.name.toLowerCase().contains(query) ||
                   p.phone.toLowerCase().contains(query);
             }).toList();
-
-            // Filter by selected category balance
-            if (_selectedFilter == 'Money') {
-              filteredParties = filteredParties
-                  .where((p) => p.cashBalance != 0)
-                  .toList();
-            } else if (_selectedFilter == 'Gold') {
-              filteredParties = filteredParties
-                  .where((p) => p.goldBalanceGrams != 0)
-                  .toList();
-            } else if (_selectedFilter == 'Diamond') {
-              filteredParties = filteredParties
-                  .where((p) => p.diamondBalanceCarats != 0)
-                  .toList();
-            }
-
-            // Calculate dynamic summary values from all parties (reflecting total outstanding positions)
-            double totalCashReceivable = 0;
-            double totalGoldReceivable = 0;
-            double totalCashPayable = 0;
-            double totalGoldPayable = 0;
-
-            for (final p in parties) {
-              if (p.cashBalance > 0) {
-                totalCashReceivable += p.cashBalance;
-              } else if (p.cashBalance < 0) {
-                totalCashPayable += p.cashBalance.abs();
-              }
-
-              if (p.goldBalanceGrams > 0) {
-                totalGoldReceivable += p.goldBalanceGrams;
-              } else if (p.goldBalanceGrams < 0) {
-                totalGoldPayable += p.goldBalanceGrams.abs();
-              }
-            }
 
             return SingleChildScrollView(
               physics: const BouncingScrollPhysics(),
@@ -107,19 +70,7 @@ class _LedgerScreenState extends ConsumerState<LedgerScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _buildSearchBar(isTablet),
-                  if (isTablet) ...[
-                    const SizedBox(height: 16),
-                    _buildFilterChips(isTablet),
-                    const SizedBox(height: 24),
-                    _buildDynamicSummaryCards(
-                      isTablet: isTablet,
-                      totalCashReceivable: totalCashReceivable,
-                      totalGoldReceivable: totalGoldReceivable,
-                      totalCashPayable: totalCashPayable,
-                      totalGoldPayable: totalGoldPayable,
-                    ),
-                  ],
-                  SizedBox(height: isTablet ? 28 : 32),
+                  SizedBox(height: isTablet ? 24 : 16),
                   _buildRecentActivityHeader(isTablet),
                   SizedBox(height: isTablet ? 24 : 16),
                   _buildPartiesList(filteredParties, isTablet, transactions),
@@ -196,188 +147,6 @@ class _LedgerScreenState extends ConsumerState<LedgerScreen> {
             vertical: isTablet ? 18 : 14,
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildFilterChips(bool isTablet) {
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      physics: const BouncingScrollPhysics(),
-      child: Row(
-        children: _filters.map((filter) {
-          final isSelected = _selectedFilter == filter;
-          return Padding(
-            padding: EdgeInsets.only(right: isTablet ? 16.0 : 12.0),
-            child: GestureDetector(
-              onTap: () {
-                setState(() {
-                  _selectedFilter = filter;
-                });
-              },
-              child: Container(
-                padding: EdgeInsets.symmetric(
-                  horizontal: isTablet ? 24 : 20,
-                  vertical: isTablet ? 10 : 8,
-                ),
-                decoration: BoxDecoration(
-                  color: isSelected
-                      ? const Color(0xFF6B5800)
-                      : const Color(0xFFF5EFE6),
-                  borderRadius: BorderRadius.circular(isTablet ? 24 : 20),
-                  border: Border.all(
-                    color: isSelected
-                        ? const Color(0xFF6B5800)
-                        : Colors.grey.withOpacity(0.2),
-                  ),
-                ),
-                child: Text(
-                  filter,
-                  style: GoogleFonts.montserrat(
-                    color: isSelected ? Colors.white : Colors.black87,
-                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-                    fontSize: isTablet ? 16 : 14,
-                  ),
-                ),
-              ),
-            ),
-          );
-        }).toList(),
-      ),
-    );
-  }
-
-  Widget _buildDynamicSummaryCards({
-    required bool isTablet,
-    required double totalCashReceivable,
-    required double totalGoldReceivable,
-    required double totalCashPayable,
-    required double totalGoldPayable,
-  }) {
-    final formatCurrency = NumberFormat.decimalPattern('en_IN');
-    final cashReceivableStr = '₹ ${formatCurrency.format(totalCashReceivable)}';
-    final goldReceivableStr =
-        '${totalGoldReceivable.toStringAsFixed(3)}g Fine Gold';
-
-    final cashPayableStr = '₹ ${formatCurrency.format(totalCashPayable)}';
-    final goldPayableStr =
-        '${totalGoldPayable.toStringAsFixed(3)}g Fine Gold';
-
-    return Row(
-      children: [
-        Expanded(
-          child: _buildSummaryCard(
-            isTablet: isTablet,
-            title: 'Total\nReceivables',
-            amount: cashReceivableStr,
-            subtitle: goldReceivableStr,
-            icon: Icons.arrow_downward,
-            iconColor: const Color(0xFF2852C6),
-            circleColor: const Color(0xFFF0F4FF),
-          ),
-        ),
-        SizedBox(width: isTablet ? 20 : 12),
-        Expanded(
-          child: _buildSummaryCard(
-            isTablet: isTablet,
-            title: 'Total Payables\n',
-            amount: cashPayableStr,
-            subtitle: goldPayableStr,
-            icon: Icons.arrow_upward,
-            iconColor: const Color(0xFFC62828),
-            circleColor: const Color(0xFFFFF0F0),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildSummaryCard({
-    required bool isTablet,
-    required String title,
-    required String amount,
-    required String subtitle,
-    required IconData icon,
-    required Color iconColor,
-    required Color circleColor,
-  }) {
-    return Container(
-      padding: EdgeInsets.all(isTablet ? 20 : 16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(isTablet ? 20 : 16),
-        border: Border.all(color: Colors.grey.withOpacity(0.15)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.02),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          Positioned(
-            right: isTablet ? -20 : -16,
-            top: isTablet ? -20 : -16,
-            child: Container(
-              width: isTablet ? 88 : 80,
-              height: isTablet ? 88 : 80,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: circleColor,
-              ),
-            ),
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: GoogleFonts.montserrat(
-                      fontSize: isTablet ? 15 : 13,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.grey[800],
-                      height: 1.2,
-                    ),
-                  ),
-                  Transform.rotate(
-                    angle: 0.8,
-                    child: Icon(
-                      icon,
-                      color: iconColor,
-                      size: isTablet ? 22 : 20,
-                    ),
-                  ),
-                ],
-              ),
-              SizedBox(height: isTablet ? 20 : 16),
-              Text(
-                amount,
-                style: GoogleFonts.montserrat(
-                  fontSize: isTablet ? 23 : 20,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black87,
-                  letterSpacing: -0.5,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                subtitle,
-                style: GoogleFonts.montserrat(
-                  fontSize: isTablet ? 14 : 12,
-                  color: Colors.grey[700],
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
-        ],
       ),
     );
   }
@@ -845,7 +614,7 @@ class _LedgerScreenState extends ConsumerState<LedgerScreen> {
                             ),
                             const SizedBox(height: 8),
                             Text(
-                              'PDF saved to Documents/SwarnKhata/Ledger',
+                              'PDF saved to Downloads folder',
                               style: GoogleFonts.montserrat(
                                 fontSize: 12,
                                 color: Colors.grey[600],
@@ -1058,16 +827,25 @@ class _LedgerScreenState extends ConsumerState<LedgerScreen> {
                           children: [
                             Expanded(
                               child: OutlinedButton.icon(
-                                onPressed: () {
+                                onPressed: () async {
                                   setDialogState(() {
                                     isPrinting = true;
                                   });
-                                  Future.delayed(const Duration(seconds: 2), () {
+                                  try {
+                                    final pdfBytes = await PdfService.generateCustomerLedgerPdf(
+                                      party: party,
+                                      transactions: txns,
+                                    );
+                                    await PdfService.printPdf(pdfBytes);
+                                    Navigator.pop(context);
+                                  } catch (e) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(content: Text('Error printing: $e')),
+                                    );
                                     setDialogState(() {
                                       isPrinting = false;
-                                      isSaved = true;
                                     });
-                                  });
+                                  }
                                 },
                                 icon: const Icon(Icons.print_rounded, size: 18, color: Color(0xFF01565B)),
                                 label: Text(
@@ -1090,16 +868,31 @@ class _LedgerScreenState extends ConsumerState<LedgerScreen> {
                             const SizedBox(width: 12),
                             Expanded(
                               child: ElevatedButton.icon(
-                                onPressed: () {
+                                onPressed: () async {
                                   setDialogState(() {
                                     isPrinting = true;
                                   });
-                                  Future.delayed(const Duration(seconds: 1), () {
+                                  try {
+                                    final pdfBytes = await PdfService.generateCustomerLedgerPdf(
+                                      party: party,
+                                      transactions: txns,
+                                    );
+                                    final success = await PdfService.savePdfToDownloads(
+                                      pdfBytes,
+                                      'Ledger_${party.name}_${DateTime.now().millisecondsSinceEpoch}',
+                                    );
                                     setDialogState(() {
                                       isPrinting = false;
-                                      isSaved = true;
+                                      isSaved = success;
                                     });
-                                  });
+                                  } catch (e) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(content: Text('Error saving PDF: $e')),
+                                    );
+                                    setDialogState(() {
+                                      isPrinting = false;
+                                    });
+                                  }
                                 },
                                 icon: const Icon(Icons.picture_as_pdf, size: 18, color: Colors.white),
                                 label: Text(

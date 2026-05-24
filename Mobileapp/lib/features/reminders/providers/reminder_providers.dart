@@ -4,6 +4,7 @@ import 'package:swastik_mobile_app/core/services/reminder_service.dart';
 import 'package:swastik_mobile_app/core/services/notification_service.dart';
 import 'package:swastik_mobile_app/features/auth/providers/auth_providers.dart';
 import 'package:swastik_mobile_app/core/utils/constants.dart';
+import 'package:swastik_mobile_app/core/utils/time_utils.dart';
 
 final reminderServiceProvider = Provider((ref) => ReminderService());
 
@@ -12,7 +13,7 @@ final Set<String> _scheduledReminders = {};
 final remindersStreamProvider = StreamProvider<List<ReminderModel>>((ref) {
   return ref.watch(reminderServiceProvider).getReminders(AppConstants.centralDbId).map((reminders) {
     for (var r in reminders) {
-      if (!_scheduledReminders.contains(r.id) && r.status == ReminderStatus.upcoming && r.date.isAfter(DateTime.now())) {
+      if (!_scheduledReminders.contains(r.id) && r.status == ReminderStatus.upcoming && r.date.isAfter(TimeUtils.now)) {
         NotificationService().scheduleReminderNotification(r);
         _scheduledReminders.add(r.id);
       }
@@ -51,7 +52,7 @@ class ReminderNotifier extends Notifier<AsyncValue<void>> {
         note: note,
         date: date,
         status: ReminderStatus.upcoming,
-        createdAt: DateTime.now(),
+        createdAt: TimeUtils.now,
       );
 
       await ref.read(reminderServiceProvider).createReminder(reminder);

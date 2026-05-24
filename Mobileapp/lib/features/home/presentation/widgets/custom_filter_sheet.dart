@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
+import 'package:swastik_mobile_app/core/utils/time_utils.dart';
 
 /// Result returned when the user applies a custom filter.
 class CustomFilterResult {
@@ -65,9 +66,9 @@ class _CustomFilterSheetState extends State<CustomFilterSheet>
   late TabController _tabController;
 
   // ── State ──────────────────────────────────────────────────────
-  DateTime _selectedDate = DateTime.now();
-  int _selectedMonth = DateTime.now().month;
-  int _selectedYear = DateTime.now().year;
+  DateTime _selectedDate = TimeUtils.now;
+  int _selectedMonth = TimeUtils.now.month;
+  int _selectedYear = TimeUtils.now.year;
 
   static const List<String> _monthLabels = [
     'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
@@ -329,8 +330,8 @@ class _CustomFilterSheetState extends State<CustomFilterSheet>
               ),
               child: CalendarDatePicker(
                 initialDate: _selectedDate,
-                firstDate: DateTime(2020),
-                lastDate: DateTime.now().add(const Duration(days: 365)),
+                firstDate: DateTime(2000),
+                lastDate: TimeUtils.now.add(const Duration(days: 365)),
                 onDateChanged: (date) {
                   setState(() => _selectedDate = date);
                 },
@@ -400,7 +401,7 @@ class _CustomFilterSheetState extends State<CustomFilterSheet>
       itemBuilder: (context, index) {
         final month = index + 1;
         final isSelected = month == selectedMonth;
-        final isCurrentMonth = month == DateTime.now().month;
+        final isCurrentMonth = month == TimeUtils.now.month;
 
         return GestureDetector(
           onTap: () => onSelect(month),

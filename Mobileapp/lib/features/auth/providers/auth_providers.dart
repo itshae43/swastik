@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:swastik_mobile_app/core/utils/time_utils.dart';
 import 'package:swastik_mobile_app/core/services/auth_service.dart';
 import 'package:swastik_mobile_app/features/auth/models/user_profile.dart';
 import 'package:swastik_mobile_app/features/auth/providers/user_profiles_provider.dart';
@@ -41,7 +42,22 @@ class AuthNotifier extends Notifier<AuthStatus> {
   Future<void> verify() async {
     state = AuthStatus.loading;
     try {
-      final isVerified = await ref.read(authServiceProvider).verifyDevice();
+      final authService = ref.read(authServiceProvider);
+      
+      // Sync authoritative server time first
+      try {
+        final serverTime = await authService.getServerTime();
+        if (serverTime != null) {
+          final localTime = DateTime.now();
+          final offset = serverTime.difference(localTime);
+          TimeUtils.serverOffset = offset;
+          debugPrint('[AuthNotifier] Synced with server clock. Offset: ${offset.inMilliseconds} ms');
+        }
+      } catch (e) {
+        debugPrint('[AuthNotifier] Server time sync failed, falling back to local device clock: $e');
+      }
+
+      final isVerified = await authService.verifyDevice();
       state = isVerified ? AuthStatus.verified : AuthStatus.unverified;
       debugPrint('[AuthNotifier] Verification result: $state');
       

@@ -1,3 +1,5 @@
+import '../utils/time_utils.dart';
+
 enum TransactionType { sale, purchase, payment, receipt, metalIn, metalOut, return_ }
 
 enum PaymentMode { cash, online, metal, mixed, upi, rtgs }
@@ -52,8 +54,8 @@ class TransactionModel {
       metalWeight: (map['metalWeight'] as num?)?.toDouble() ?? 0.0,
       metalPurity: map['metalPurity'] as String? ?? '',
       notes: map['notes'] as String? ?? '',
-      date: map['date'] != null ? DateTime.parse(map['date']) : DateTime.now(),
-      createdAt: map['createdAt'] != null ? DateTime.parse(map['createdAt']) : DateTime.now(),
+      date: map['date'] != null ? TimeUtils.to2007(DateTime.parse(map['date']).toLocal()) : TimeUtils.now,
+      createdAt: map['createdAt'] != null ? TimeUtils.to2007(DateTime.parse(map['createdAt']).toLocal()) : TimeUtils.now,
     );
   }
 
@@ -69,8 +71,8 @@ class TransactionModel {
       'metalWeight': metalWeight,
       'metalPurity': metalPurity,
       'notes': notes,
-      'date': date.toIso8601String(),
-      'createdAt': createdAt.toIso8601String(),
+      'date': date.toUtc().toIso8601String(),
+      'createdAt': createdAt.toUtc().toIso8601String(),
     };
   }
 

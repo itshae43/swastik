@@ -6,6 +6,7 @@ import 'package:swastik_mobile_app/features/reminders/providers/reminder_provide
 import 'package:swastik_mobile_app/core/models/reminder_model.dart';
 import 'package:swastik_mobile_app/core/utils/communication_utils.dart';
 import 'package:swastik_mobile_app/core/utils/responsive_utils.dart';
+import 'package:swastik_mobile_app/core/utils/time_utils.dart';
 
 class RemindersScreen extends ConsumerStatefulWidget {
   const RemindersScreen({super.key});
@@ -230,7 +231,7 @@ class _RemindersScreenState extends ConsumerState<RemindersScreen>
     Color statusColor = const Color(0xFF6B5800); // Default UPCOMING
     IconData statusIcon = Icons.access_time;
 
-    final now = DateTime.now();
+    final now = TimeUtils.now;
     final isOverdue = reminder.date.isBefore(now) && isPending;
     final isTomorrow =
         reminder.date.day == now.add(const Duration(days: 1)).day &&
@@ -584,7 +585,7 @@ class _RemindersScreenState extends ConsumerState<RemindersScreen>
                 SizedBox(height: isTablet ? 10 : 8),
                 InkWell(
                   onTap: () async {
-                    final now = DateTime.now();
+                    final now = TimeUtils.now;
                     final firstDate = selectedDate.isBefore(now) ? selectedDate : now;
                     final date = await showDatePicker(
                       context: context,

@@ -95,12 +95,8 @@ class _QuickAddPartyBottomSheetState extends ConsumerState<QuickAddPartyBottomSh
                         return;
                       }
                       
-                      if (_phoneController.text.isEmpty) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Please enter phone number')),
-                        );
-                        return;
-                      }
+                      final navigator = Navigator.of(context);
+                      final scaffoldMessenger = ScaffoldMessenger.of(context);
 
                       final newPartyId = await ref.read(partyNotifierProvider.notifier).createParty(
                         name: _nameController.text.trim(),
@@ -113,14 +109,14 @@ class _QuickAddPartyBottomSheetState extends ConsumerState<QuickAddPartyBottomSh
                         diamondBalance: 0.0,
                       );
 
-                      if (newPartyId != null && mounted) {
-                        setState(() => _isSaved = true);
-                        await Future.delayed(const Duration(milliseconds: 600));
+                      if (newPartyId != null) {
                         if (mounted) {
-                          Navigator.pop(context, newPartyId);
+                          setState(() => _isSaved = true);
                         }
-                      } else if (partyState.error != null && mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
+                        await Future.delayed(const Duration(milliseconds: 600));
+                        navigator.pop(newPartyId);
+                      } else if (partyState.error != null) {
+                        scaffoldMessenger.showSnackBar(
                           SnackBar(content: Text(partyState.error!)),
                         );
                       }
@@ -230,7 +226,7 @@ class _QuickAddPartyBottomSheetState extends ConsumerState<QuickAddPartyBottomSh
             ),
             children: const [
               TextSpan(text: 'Phone Number '),
-              TextSpan(text: '*', style: TextStyle(color: Colors.red)),
+              TextSpan(text: '(Optional)', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.normal)),
             ],
           ),
         ),

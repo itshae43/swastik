@@ -4,7 +4,9 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:swastik_mobile_app/core/models/transaction_model.dart';
 import 'package:swastik_mobile_app/core/utils/responsive_utils.dart';
+import 'package:swastik_mobile_app/core/utils/time_utils.dart';
 import 'package:swastik_mobile_app/features/ledger/providers/transaction_providers.dart';
+import 'package:swastik_mobile_app/core/services/pdf_service.dart';
 
 class TransactionStatementScreen extends ConsumerStatefulWidget {
   final String category; // 'cash', 'online', 'gold', 'diamond'
@@ -229,7 +231,7 @@ class _TransactionStatementScreenState extends ConsumerState<TransactionStatemen
           }).toList();
 
           // 4. Apply date filter
-          final now = DateTime.now();
+          final now = TimeUtils.now;
           filteredTxns = filteredTxns.where((t) {
             if (_dateFilter == 'Today') {
               return t.date.year == now.year && t.date.month == now.month && t.date.day == now.day;
@@ -806,7 +808,7 @@ class _TransactionStatementScreenState extends ConsumerState<TransactionStatemen
                             ),
                             const SizedBox(height: 8),
                             Text(
-                              'PDF saved to Documents/SwarnKhata',
+                              'PDF saved to Downloads folder',
                               style: GoogleFonts.montserrat(
                                 fontSize: 12,
                                 color: Colors.grey[600],
@@ -857,6 +859,11 @@ class _TransactionStatementScreenState extends ConsumerState<TransactionStatemen
                               Center(
                                 child: Column(
                                   children: [
+                                    Image.asset(
+                                      'assets/images/logo.png',
+                                      height: 40,
+                                    ),
+                                    const SizedBox(height: 6),
                                     Text(
                                       'SWASTIK JEWELS',
                                       style: GoogleFonts.montserrat(
@@ -963,16 +970,26 @@ class _TransactionStatementScreenState extends ConsumerState<TransactionStatemen
                           children: [
                             Expanded(
                               child: OutlinedButton.icon(
-                                onPressed: () {
+                                onPressed: () async {
                                   setDialogState(() {
                                     isPrinting = true;
                                   });
-                                  Future.delayed(const Duration(seconds: 2), () {
+                                  try {
+                                    final pdfBytes = await PdfService.generateReceiptPdf(
+                                      transaction: t,
+                                      amountStr: amountStr,
+                                      badgeText: badgeText,
+                                    );
+                                    await PdfService.printPdf(pdfBytes);
+                                    Navigator.pop(context);
+                                  } catch (e) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(content: Text('Error printing: $e')),
+                                    );
                                     setDialogState(() {
                                       isPrinting = false;
-                                      isSaved = true;
                                     });
-                                  });
+                                  }
                                 },
                                 icon: const Icon(Icons.print_rounded, size: 18, color: Color(0xFF01565B)),
                                 label: Text(
@@ -995,16 +1012,32 @@ class _TransactionStatementScreenState extends ConsumerState<TransactionStatemen
                             const SizedBox(width: 12),
                             Expanded(
                               child: ElevatedButton.icon(
-                                onPressed: () {
+                                onPressed: () async {
                                   setDialogState(() {
                                     isPrinting = true;
                                   });
-                                  Future.delayed(const Duration(seconds: 1), () {
+                                  try {
+                                    final pdfBytes = await PdfService.generateReceiptPdf(
+                                      transaction: t,
+                                      amountStr: amountStr,
+                                      badgeText: badgeText,
+                                    );
+                                    final success = await PdfService.savePdfToDownloads(
+                                      pdfBytes,
+                                      'Receipt_${receiptNo}',
+                                    );
                                     setDialogState(() {
                                       isPrinting = false;
-                                      isSaved = true;
+                                      isSaved = success;
                                     });
-                                  });
+                                  } catch (e) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(content: Text('Error saving PDF: $e')),
+                                    );
+                                    setDialogState(() {
+                                      isPrinting = false;
+                                    });
+                                  }
                                 },
                                 icon: const Icon(Icons.picture_as_pdf, size: 18, color: Colors.white),
                                 label: Text(
@@ -1160,7 +1193,7 @@ class _TransactionStatementScreenState extends ConsumerState<TransactionStatemen
                             ),
                             const SizedBox(height: 8),
                             Text(
-                              'PDF saved to Documents/SwarnKhata/Statements',
+                              'PDF saved to Downloads folder',
                               style: GoogleFonts.montserrat(
                                 fontSize: 12,
                                 color: Colors.grey[600],
@@ -1216,7 +1249,7 @@ class _TransactionStatementScreenState extends ConsumerState<TransactionStatemen
                                       ),
                                       const SizedBox(height: 4),
                                       Text(
-                                        'Period: ${DateFormat('dd MMM yyyy').format(DateTime.now().subtract(const Duration(days: 30)))} - ${DateFormat('dd MMM yyyy').format(DateTime.now())}',
+                                        'Period: ${DateFormat('dd MMM yyyy').format(TimeUtils.now.subtract(const Duration(days: 30)))} - ${DateFormat('dd MMM yyyy').format(TimeUtils.now)}',
                                         style: GoogleFonts.montserrat(
                                           fontSize: 9,
                                           fontWeight: FontWeight.w600,
@@ -1304,16 +1337,27 @@ class _TransactionStatementScreenState extends ConsumerState<TransactionStatemen
                           children: [
                             Expanded(
                               child: OutlinedButton.icon(
-                                onPressed: () {
+                                onPressed: () async {
                                   setDialogState(() {
                                     isPrinting = true;
                                   });
-                                  Future.delayed(const Duration(seconds: 2), () {
+                                  try {
+                                    final pdfBytes = await PdfService.generateStatementPdf(
+                                      transactions: txns,
+                                      title: 'Statement',
+                                      subtitle: 'Category: ${widget.category.toUpperCase()}',
+                                      totalBalance: totalBalance,
+                                    );
+                                    await PdfService.printPdf(pdfBytes);
+                                    Navigator.pop(context);
+                                  } catch (e) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(content: Text('Error printing: $e')),
+                                    );
                                     setDialogState(() {
                                       isPrinting = false;
-                                      isSaved = true;
                                     });
-                                  });
+                                  }
                                 },
                                 icon: const Icon(Icons.print_rounded, size: 18, color: Color(0xFF01565B)),
                                 label: Text(
@@ -1336,16 +1380,33 @@ class _TransactionStatementScreenState extends ConsumerState<TransactionStatemen
                             const SizedBox(width: 12),
                             Expanded(
                               child: ElevatedButton.icon(
-                                onPressed: () {
+                                onPressed: () async {
                                   setDialogState(() {
                                     isPrinting = true;
                                   });
-                                  Future.delayed(const Duration(seconds: 1), () {
+                                  try {
+                                    final pdfBytes = await PdfService.generateStatementPdf(
+                                      transactions: txns,
+                                      title: 'Statement',
+                                      subtitle: 'Category: ${widget.category.toUpperCase()}',
+                                      totalBalance: totalBalance,
+                                    );
+                                    final success = await PdfService.savePdfToDownloads(
+                                      pdfBytes,
+                                      'Statement_${widget.category}_${DateTime.now().millisecondsSinceEpoch}',
+                                    );
                                     setDialogState(() {
                                       isPrinting = false;
-                                      isSaved = true;
+                                      isSaved = success;
                                     });
-                                  });
+                                  } catch (e) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(content: Text('Error saving PDF: $e')),
+                                    );
+                                    setDialogState(() {
+                                      isPrinting = false;
+                                    });
+                                  }
                                 },
                                 icon: const Icon(Icons.picture_as_pdf, size: 18, color: Colors.white),
                                 label: Text(

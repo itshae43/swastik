@@ -116,6 +116,26 @@ class AuthService {
       return false;
     }
   }
+
+  Future<DateTime?> getServerTime() async {
+    try {
+      final url = '$baseUrl/time';
+      debugPrint('[AuthService] GET $url');
+      final response = await http.get(
+        Uri.parse(url),
+        headers: {'Content-Type': 'application/json'},
+      ).timeout(const Duration(seconds: 10));
+
+      debugPrint('[AuthService] Server time status: ${response.statusCode}');
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return DateTime.parse(data['serverTime']);
+      }
+    } catch (e) {
+      debugPrint('[AuthService] Error in getServerTime: $e');
+    }
+    return null;
+  }
 }
 
 

@@ -722,6 +722,13 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+// Server time endpoint for network clock synchronization
+app.get('/api/time', (req, res) => {
+  res.json({
+    serverTime: new Date().toISOString(),
+  });
+});
+
 // SSE Endpoint
 app.get('/api/events', (req: Request, res: Response) => {
   res.setHeader('Content-Type', 'text/event-stream');

@@ -1,5 +1,8 @@
 
 
+import '../utils/time_utils.dart';
+
+
 class UserModel {
   final String uid;
   final String fullName;
@@ -32,8 +35,8 @@ class UserModel {
       phone: map['phone'] as String? ?? '',
       photoUrl: map['photoUrl'] as String? ?? '',
       authProvider: map['authProvider'] as String? ?? 'email',
-      createdAt: map['createdAt'] != null ? DateTime.parse(map['createdAt'].toString()) : DateTime.now(),
-      updatedAt: map['updatedAt'] != null ? DateTime.parse(map['updatedAt'].toString()) : DateTime.now(),
+      createdAt: map['createdAt'] != null ? TimeUtils.to2007(DateTime.parse(map['createdAt'].toString())) : TimeUtils.now,
+      updatedAt: map['updatedAt'] != null ? TimeUtils.to2007(DateTime.parse(map['updatedAt'].toString())) : TimeUtils.now,
     );
   }
 
