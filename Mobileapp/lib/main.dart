@@ -4,11 +4,13 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:swastik_mobile_app/core/utils/responsive_utils.dart';
 import 'package:swastik_mobile_app/core/services/notification_service.dart';
 import 'package:timezone/data/latest.dart' as tz;
+import 'package:swastik_mobile_app/core/utils/device_identity.dart';
 import 'features/auth/presentation/screens/splash_screen.dart';
 import 'items_widget.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await DeviceIdentity.init();
   tz.initializeTimeZones();
   await NotificationService().init();
   runApp(const ProviderScope(child: SwarnKhataApp()));

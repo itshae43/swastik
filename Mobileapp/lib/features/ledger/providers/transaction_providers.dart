@@ -5,7 +5,7 @@ import 'package:swastik_mobile_app/features/auth/providers/auth_providers.dart';
 import 'package:swastik_mobile_app/core/utils/constants.dart';
 import 'package:swastik_mobile_app/core/utils/time_utils.dart';
 
-final transactionServiceProvider = Provider<TransactionService>((ref) => TransactionService());
+final transactionServiceProvider = Provider<TransactionService>((ref) => TransactionService(ref));
 
 final transactionsStreamProvider = StreamProvider<List<TransactionModel>>((ref) {
   return ref.watch(transactionServiceProvider).transactionsStream(AppConstants.centralDbId);
@@ -82,6 +82,33 @@ class TransactionNotifier extends Notifier<TransactionState> {
       );
 
       await _transactionService.createTransaction(transaction);
+      state = state.copyWith(isLoading: false, isSuccess: true);
+      return true;
+    } catch (e) {
+      state = state.copyWith(isLoading: false, error: e.toString());
+      return false;
+    }
+  }
+
+  Future<bool> updateTransaction({
+    required TransactionModel oldTx,
+    required TransactionModel newTx,
+  }) async {
+    state = state.copyWith(isLoading: true, clearError: true);
+    try {
+      await _transactionService.updateTransaction(oldTx, newTx);
+      state = state.copyWith(isLoading: false, isSuccess: true);
+      return true;
+    } catch (e) {
+      state = state.copyWith(isLoading: false, error: e.toString());
+      return false;
+    }
+  }
+
+  Future<bool> deleteTransaction(TransactionModel transaction) async {
+    state = state.copyWith(isLoading: true, clearError: true);
+    try {
+      await _transactionService.deleteTransaction(transaction);
       state = state.copyWith(isLoading: false, isSuccess: true);
       return true;
     } catch (e) {

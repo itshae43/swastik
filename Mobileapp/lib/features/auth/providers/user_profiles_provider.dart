@@ -5,7 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:swastik_mobile_app/features/auth/models/user_profile.dart';
 import 'package:swastik_mobile_app/services/api_service.dart';
 
-final apiServiceProvider = Provider<ApiService>((ref) => ApiService());
+final apiServiceProvider = Provider<ApiService>((ref) => ApiService(ref));
 
 class UserProfilesState {
   final List<UserProfileModel> profiles;

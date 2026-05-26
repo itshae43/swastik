@@ -1,6 +1,9 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:swastik_mobile_app/constants/api_config.dart';
+import 'package:swastik_mobile_app/core/utils/device_identity.dart';
+import 'package:swastik_mobile_app/features/auth/providers/auth_providers.dart';
 
 /// A centralised HTTP service that wraps every backend endpoint.
 ///
@@ -10,10 +13,26 @@ import 'package:swastik_mobile_app/constants/api_config.dart';
 /// final parties = await api.getParties();
 /// ```
 class ApiService {
+  final Ref? _ref;
+  ApiService([this._ref]);
+
   final String _base = ApiConfig.baseUrl;
-  final Map<String, String> _jsonHeaders = {
-    'Content-Type': 'application/json',
-  };
+
+  Map<String, String> _getHeaders() {
+    final headers = {
+      'Content-Type': 'application/json',
+      'x-android-id': DeviceIdentity.androidId,
+      'x-device-brand': DeviceIdentity.brand,
+      'x-device-model': DeviceIdentity.model,
+    };
+    if (_ref != null) {
+      final staffProfile = _ref.read(currentUserProfileProvider);
+      if (staffProfile != null) {
+        headers['x-staff-id'] = staffProfile.id;
+      }
+    }
+    return headers;
+  }
 
   // ──────────────────────────────────────────────────────────────────────
   //  Health
@@ -38,7 +57,7 @@ class ApiService {
   }) async {
     final res = await http.post(
       Uri.parse('$_base/api/verify'),
-      headers: _jsonHeaders,
+      headers: _getHeaders(),
       body: jsonEncode({
         'androidId': androidId,
         'brand': brand,
@@ -55,7 +74,7 @@ class ApiService {
 
   /// GET /api/parties — fetch all parties.
   Future<List<dynamic>> getParties() async {
-    final res = await http.get(Uri.parse('$_base/api/parties'));
+    final res = await http.get(Uri.parse('$_base/api/parties'), headers: _getHeaders());
     _assertOk(res);
     return jsonDecode(res.body) as List<dynamic>;
   }
@@ -64,7 +83,7 @@ class ApiService {
   Future<Map<String, dynamic>> createParty(Map<String, dynamic> body) async {
     final res = await http.post(
       Uri.parse('$_base/api/parties'),
-      headers: _jsonHeaders,
+      headers: _getHeaders(),
       body: jsonEncode(body),
     );
     if (res.statusCode != 201 && res.statusCode != 200) {
@@ -80,7 +99,7 @@ class ApiService {
   ) async {
     final res = await http.put(
       Uri.parse('$_base/api/parties/$id'),
-      headers: _jsonHeaders,
+      headers: _getHeaders(),
       body: jsonEncode(body),
     );
     _assertOk(res);
@@ -89,7 +108,7 @@ class ApiService {
 
   /// DELETE /api/parties/:id — delete a party.
   Future<Map<String, dynamic>> deleteParty(String id) async {
-    final res = await http.delete(Uri.parse('$_base/api/parties/$id'));
+    final res = await http.delete(Uri.parse('$_base/api/parties/$id'), headers: _getHeaders());
     _assertOk(res);
     return jsonDecode(res.body) as Map<String, dynamic>;
   }
@@ -100,7 +119,7 @@ class ApiService {
 
   /// GET /api/transactions — fetch all transactions.
   Future<List<dynamic>> getTransactions() async {
-    final res = await http.get(Uri.parse('$_base/api/transactions'));
+    final res = await http.get(Uri.parse('$_base/api/transactions'), headers: _getHeaders());
     _assertOk(res);
     return jsonDecode(res.body) as List<dynamic>;
   }
@@ -111,7 +130,7 @@ class ApiService {
   ) async {
     final res = await http.post(
       Uri.parse('$_base/api/transactions'),
-      headers: _jsonHeaders,
+      headers: _getHeaders(),
       body: jsonEncode(body),
     );
     if (res.statusCode != 201 && res.statusCode != 200) {
@@ -127,7 +146,7 @@ class ApiService {
   ) async {
     final res = await http.put(
       Uri.parse('$_base/api/transactions/$id'),
-      headers: _jsonHeaders,
+      headers: _getHeaders(),
       body: jsonEncode(body),
     );
     _assertOk(res);
@@ -136,7 +155,7 @@ class ApiService {
 
   /// DELETE /api/transactions/:id — delete a transaction.
   Future<Map<String, dynamic>> deleteTransaction(String id) async {
-    final res = await http.delete(Uri.parse('$_base/api/transactions/$id'));
+    final res = await http.delete(Uri.parse('$_base/api/transactions/$id'), headers: _getHeaders());
     _assertOk(res);
     return jsonDecode(res.body) as Map<String, dynamic>;
   }
@@ -147,7 +166,7 @@ class ApiService {
 
   /// GET /api/reminders — fetch all reminders.
   Future<List<dynamic>> getReminders() async {
-    final res = await http.get(Uri.parse('$_base/api/reminders'));
+    final res = await http.get(Uri.parse('$_base/api/reminders'), headers: _getHeaders());
     _assertOk(res);
     return jsonDecode(res.body) as List<dynamic>;
   }
@@ -158,7 +177,7 @@ class ApiService {
   ) async {
     final res = await http.post(
       Uri.parse('$_base/api/reminders'),
-      headers: _jsonHeaders,
+      headers: _getHeaders(),
       body: jsonEncode(body),
     );
     if (res.statusCode != 201 && res.statusCode != 200) {
@@ -174,7 +193,7 @@ class ApiService {
   ) async {
     final res = await http.put(
       Uri.parse('$_base/api/reminders/$id'),
-      headers: _jsonHeaders,
+      headers: _getHeaders(),
       body: jsonEncode(body),
     );
     _assertOk(res);
@@ -183,7 +202,7 @@ class ApiService {
 
   /// DELETE /api/reminders/:id — delete a reminder.
   Future<Map<String, dynamic>> deleteReminder(String id) async {
-    final res = await http.delete(Uri.parse('$_base/api/reminders/$id'));
+    final res = await http.delete(Uri.parse('$_base/api/reminders/$id'), headers: _getHeaders());
     _assertOk(res);
     return jsonDecode(res.body) as Map<String, dynamic>;
   }
@@ -194,7 +213,7 @@ class ApiService {
 
   /// GET /api/user-profiles — fetch all user profiles.
   Future<List<dynamic>> getUserProfiles() async {
-    final res = await http.get(Uri.parse('$_base/api/user-profiles'));
+    final res = await http.get(Uri.parse('$_base/api/user-profiles'), headers: _getHeaders());
     _assertOk(res);
     return jsonDecode(res.body) as List<dynamic>;
   }
@@ -203,7 +222,7 @@ class ApiService {
   Future<Map<String, dynamic>> createUserProfile(Map<String, dynamic> body) async {
     final res = await http.post(
       Uri.parse('$_base/api/user-profiles'),
-      headers: _jsonHeaders,
+      headers: _getHeaders(),
       body: jsonEncode(body),
     );
     if (res.statusCode != 201 && res.statusCode != 200) {
@@ -219,7 +238,7 @@ class ApiService {
   ) async {
     final res = await http.post(
       Uri.parse('$_base/api/user-profiles/$id/request-access'),
-      headers: _jsonHeaders,
+      headers: _getHeaders(),
       body: jsonEncode({'deviceInfo': deviceInfo}),
     );
     _assertOk(res);
@@ -230,7 +249,7 @@ class ApiService {
   Future<Map<String, dynamic>> approveProfileAccess(String id) async {
     final res = await http.post(
       Uri.parse('$_base/api/user-profiles/$id/approve'),
-      headers: _jsonHeaders,
+      headers: _getHeaders(),
     );
     _assertOk(res);
     return jsonDecode(res.body) as Map<String, dynamic>;
@@ -240,7 +259,7 @@ class ApiService {
   Future<Map<String, dynamic>> declineProfileAccess(String id) async {
     final res = await http.post(
       Uri.parse('$_base/api/user-profiles/$id/decline'),
-      headers: _jsonHeaders,
+      headers: _getHeaders(),
     );
     _assertOk(res);
     return jsonDecode(res.body) as Map<String, dynamic>;

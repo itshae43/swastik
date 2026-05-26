@@ -7,6 +7,7 @@ import 'package:swastik_mobile_app/core/utils/responsive_utils.dart';
 import 'package:swastik_mobile_app/core/utils/time_utils.dart';
 import 'package:swastik_mobile_app/features/ledger/providers/transaction_providers.dart';
 import 'package:swastik_mobile_app/core/services/pdf_service.dart';
+import 'package:swastik_mobile_app/features/auth/providers/auth_providers.dart';
 
 class TransactionStatementScreen extends ConsumerStatefulWidget {
   final String category; // 'cash', 'online', 'gold', 'diamond'
@@ -648,6 +649,25 @@ class _TransactionStatementScreenState extends ConsumerState<TransactionStatemen
                                                       ),
                                                     ),
                                                   ),
+                                                  if (!ref.watch(isStaffProvider)) ...[
+                                                    const SizedBox(width: 6),
+                                                    GestureDetector(
+                                                      onTap: () => _showEditTransactionDialog(t),
+                                                      child: Container(
+                                                        padding: const EdgeInsets.all(5),
+                                                        decoration: BoxDecoration(
+                                                          color: const Color(0xFFFAF6EE),
+                                                          borderRadius: BorderRadius.circular(6),
+                                                          border: Border.all(color: const Color(0xFFE5DEC9), width: 0.5),
+                                                        ),
+                                                        child: const Icon(
+                                                          Icons.edit_rounded,
+                                                          size: 13,
+                                                          color: Color(0xFF735C0F),
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ],
                                                 ],
                                               ),
                                               const SizedBox(height: 4),
@@ -1434,6 +1454,748 @@ class _TransactionStatementScreenState extends ConsumerState<TransactionStatemen
                   ],
                 ),
               ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _showDeleteTransactionDialog(TransactionModel txn) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        bool isDeleting = false;
+
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              backgroundColor: const Color(0xFFFAF6EE),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+                side: const BorderSide(color: Color(0xFFDFBA6B), width: 1.5),
+              ),
+              title: Text(
+                'Delete Transaction?',
+                style: GoogleFonts.montserrat(
+                  fontWeight: FontWeight.bold,
+                  color: const Color(0xFFC62828),
+                ),
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Are you sure you want to delete this transaction? This will reverse its impact on the customer\'s outstanding balance.',
+                    style: GoogleFonts.montserrat(fontSize: 14, color: Colors.black87),
+                  ),
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.grey.withOpacity(0.2)),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          txn.typeLabel,
+                          style: GoogleFonts.montserrat(fontWeight: FontWeight.bold, fontSize: 13),
+                        ),
+                        Text(
+                          txn.metalType.isEmpty 
+                              ? '₹${txn.cashAmount.toStringAsFixed(2)}' 
+                              : '${txn.metalWeight} ${txn.metalType == 'gold' ? 'g' : 'ct'}',
+                          style: GoogleFonts.montserrat(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                            color: txn.type == TransactionType.receipt || txn.type == TransactionType.metalIn
+                                ? const Color(0xFF2852C6)
+                                : const Color(0xFFC62828),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: isDeleting ? null : () => Navigator.pop(context),
+                  child: Text(
+                    'Cancel',
+                    style: GoogleFonts.montserrat(fontWeight: FontWeight.bold, color: Colors.grey[700]),
+                  ),
+                ),
+                ElevatedButton(
+                  onPressed: isDeleting
+                      ? null
+                      : () async {
+                          setDialogState(() => isDeleting = true);
+                          final success = await ref
+                              .read(transactionNotifierProvider.notifier)
+                              .deleteTransaction(txn);
+                          if (mounted) {
+                            Navigator.pop(context);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  success ? 'Transaction deleted successfully' : 'Failed to delete transaction',
+                                  style: GoogleFonts.montserrat(fontWeight: FontWeight.w600),
+                                ),
+                                backgroundColor: success ? const Color(0xFF2E7D32) : const Color(0xFFC62828),
+                              ),
+                            );
+                          }
+                        },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFC62828),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  child: isDeleting
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation<Color>(Colors.white)),
+                        )
+                      : Text(
+                          'Delete',
+                          style: GoogleFonts.montserrat(fontWeight: FontWeight.bold, color: Colors.white),
+                        ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _showEditTransactionDialog(TransactionModel txn) {
+    final amountController = TextEditingController(
+      text: txn.metalType.isEmpty ? txn.cashAmount.toString() : txn.metalWeight.toString(),
+    );
+    final notesController = TextEditingController(text: txn.notes);
+    
+    // Gold Purity field
+    final purityController = TextEditingController(
+      text: txn.metalType == 'gold' ? txn.metalPurity : '',
+    );
+    
+    // Diamond Pieces field
+    String initialPieces = txn.metalPurity;
+    if (initialPieces.endsWith(' p')) {
+      initialPieces = initialPieces.replaceAll(' p', '');
+    }
+    final piecesController = TextEditingController(
+      text: txn.metalType == 'diamond' ? initialPieces : '',
+    );
+
+    DateTime selectedDate = txn.date;
+    PaymentMode selectedPaymentMode = txn.paymentMode == PaymentMode.online ? PaymentMode.upi : txn.paymentMode;
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        bool isSaving = false;
+        bool isIn = txn.type == TransactionType.receipt || txn.type == TransactionType.metalIn;
+
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              backgroundColor: const Color(0xFFFAF6EE),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+                side: const BorderSide(color: Color(0xFFDFBA6B), width: 1.5),
+              ),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const SizedBox(height: 8),
+                    Text(
+                      'TRANSACTION TYPE',
+                      style: GoogleFonts.montserrat(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.grey[600],
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    DropdownButtonFormField<bool>(
+                      value: isIn,
+                      dropdownColor: const Color(0xFFFAF6EE),
+                      decoration: InputDecoration(
+                        filled: true,
+                        fillColor: Colors.white,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: const BorderSide(color: Color(0xFFDFBA6B)),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide(color: const Color(0xFFDFBA6B).withOpacity(0.5)),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: const BorderSide(color: Color(0xFF6B5800), width: 1.5),
+                        ),
+                      ),
+                      style: GoogleFonts.montserrat(
+                        fontWeight: FontWeight.w600,
+                        color: Colors.black87,
+                        fontSize: 14,
+                      ),
+                      onChanged: (val) {
+                        if (val != null) {
+                          setDialogState(() {
+                            isIn = val;
+                          });
+                        }
+                      },
+                      items: const [
+                        DropdownMenuItem<bool>(
+                          value: true,
+                          child: Row(
+                            children: [
+                              Icon(Icons.arrow_downward_rounded, color: Color(0xFF2E7D32), size: 18),
+                              SizedBox(width: 8),
+                              Text('In', style: TextStyle(color: Color(0xFF2E7D32), fontWeight: FontWeight.bold)),
+                            ],
+                          ),
+                        ),
+                        DropdownMenuItem<bool>(
+                          value: false,
+                          child: Row(
+                            children: [
+                              Icon(Icons.arrow_upward_rounded, color: Color(0xFFC62828), size: 18),
+                              SizedBox(width: 8),
+                              Text('Out', style: TextStyle(color: Color(0xFFC62828), fontWeight: FontWeight.bold)),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    if (txn.metalType.isEmpty) ...[
+                      // MONEY CATEGORY: Cash/UPI/RTGS dropdown + Amount
+                      Text(
+                        'PAYMENT MODE',
+                        style: GoogleFonts.montserrat(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.grey[600],
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      DropdownButtonFormField<PaymentMode>(
+                        value: selectedPaymentMode,
+                        dropdownColor: const Color(0xFFFAF6EE),
+                        decoration: InputDecoration(
+                          filled: true,
+                          fillColor: Colors.white,
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: const BorderSide(color: Color(0xFFDFBA6B)),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: BorderSide(color: const Color(0xFFDFBA6B).withOpacity(0.5)),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: const BorderSide(color: Color(0xFF6B5800), width: 1.5),
+                          ),
+                        ),
+                        style: GoogleFonts.montserrat(
+                          fontWeight: FontWeight.w600,
+                          color: Colors.black87,
+                          fontSize: 14,
+                        ),
+                        onChanged: (val) {
+                          if (val != null) {
+                            setDialogState(() {
+                              selectedPaymentMode = val;
+                            });
+                          }
+                        },
+                        items: const [
+                          DropdownMenuItem<PaymentMode>(
+                            value: PaymentMode.cash,
+                            child: Text('Cash'),
+                          ),
+                          DropdownMenuItem<PaymentMode>(
+                            value: PaymentMode.upi,
+                            child: Text('UPI'),
+                          ),
+                          DropdownMenuItem<PaymentMode>(
+                            value: PaymentMode.rtgs,
+                            child: Text('RTGS'),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'AMOUNT (₹)',
+                        style: GoogleFonts.montserrat(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.grey[600],
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: amountController,
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        style: GoogleFonts.montserrat(fontWeight: FontWeight.w600),
+                        decoration: InputDecoration(
+                          filled: true,
+                          fillColor: Colors.white,
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: const BorderSide(color: Color(0xFFDFBA6B)),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: BorderSide(color: const Color(0xFFDFBA6B).withOpacity(0.5)),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: const BorderSide(color: Color(0xFF6B5800), width: 1.5),
+                          ),
+                        ),
+                      ),
+                    ] else if (txn.metalType == 'gold') ...[
+                      // GOLD CATEGORY: Weight + Purity (Text input field for % or karat)
+                      Text(
+                        'WEIGHT (g)',
+                        style: GoogleFonts.montserrat(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.grey[600],
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: amountController,
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        style: GoogleFonts.montserrat(fontWeight: FontWeight.w600),
+                        decoration: InputDecoration(
+                          filled: true,
+                          fillColor: Colors.white,
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: const BorderSide(color: Color(0xFFDFBA6B)),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: BorderSide(color: const Color(0xFFDFBA6B).withOpacity(0.5)),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: const BorderSide(color: Color(0xFF6B5800), width: 1.5),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'PURITY',
+                        style: GoogleFonts.montserrat(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.grey[600],
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: purityController,
+                        style: GoogleFonts.montserrat(fontWeight: FontWeight.w600),
+                        decoration: InputDecoration(
+                          filled: true,
+                          fillColor: Colors.white,
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: const BorderSide(color: Color(0xFFDFBA6B)),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: BorderSide(color: const Color(0xFFDFBA6B).withOpacity(0.5)),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: const BorderSide(color: Color(0xFF6B5800), width: 1.5),
+                          ),
+                        ),
+                      ),
+                    ] else if (txn.metalType == 'diamond') ...[
+                      // DIAMOND CATEGORY: Weight (ct) + Pieces (peace)
+                      Text(
+                        'WEIGHT (ct)',
+                        style: GoogleFonts.montserrat(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.grey[600],
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: amountController,
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        style: GoogleFonts.montserrat(fontWeight: FontWeight.w600),
+                        decoration: InputDecoration(
+                          filled: true,
+                          fillColor: Colors.white,
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: const BorderSide(color: Color(0xFFDFBA6B)),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: BorderSide(color: const Color(0xFFDFBA6B).withOpacity(0.5)),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: const BorderSide(color: Color(0xFF6B5800), width: 1.5),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'PIECES',
+                        style: GoogleFonts.montserrat(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.grey[600],
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: piecesController,
+                        keyboardType: TextInputType.number,
+                        style: GoogleFonts.montserrat(fontWeight: FontWeight.w600),
+                        decoration: InputDecoration(
+                          filled: true,
+                          fillColor: Colors.white,
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: const BorderSide(color: Color(0xFFDFBA6B)),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: BorderSide(color: const Color(0xFFDFBA6B).withOpacity(0.5)),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: const BorderSide(color: Color(0xFF6B5800), width: 1.5),
+                          ),
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 16),
+                    Text(
+                      'PARTICULARS / NOTES',
+                      style: GoogleFonts.montserrat(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.grey[600],
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: notesController,
+                      maxLines: 3,
+                      style: GoogleFonts.montserrat(fontSize: 13, fontWeight: FontWeight.w500),
+                      decoration: InputDecoration(
+                        hintText: 'Add description...',
+                        filled: true,
+                        fillColor: Colors.white,
+                        contentPadding: const EdgeInsets.all(12),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: const BorderSide(color: Color(0xFFDFBA6B)),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide(color: const Color(0xFFDFBA6B).withOpacity(0.5)),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: const BorderSide(color: Color(0xFF6B5800), width: 1.5),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: const Color(0xFFDFBA6B).withOpacity(0.5)),
+                      ),
+                      child: ListTile(
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                        title: Text(
+                          'Date & Time',
+                          style: GoogleFonts.montserrat(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey[600]),
+                        ),
+                        subtitle: Padding(
+                          padding: const EdgeInsets.only(top: 4.0),
+                          child: Text(
+                            DateFormat('dd MMM yyyy • hh:mm a').format(selectedDate),
+                            style: GoogleFonts.montserrat(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black87),
+                          ),
+                        ),
+                        trailing: const Icon(Icons.calendar_today, color: Color(0xFF6B5800), size: 20),
+                        onTap: () async {
+                          final date = await showDatePicker(
+                            context: context,
+                            initialDate: selectedDate,
+                            firstDate: selectedDate.subtract(const Duration(days: 365)),
+                            lastDate: DateTime.now().add(const Duration(days: 1)),
+                          );
+                          if (date != null) {
+                            final time = await showTimePicker(
+                              context: context,
+                              initialTime: TimeOfDay.fromDateTime(selectedDate),
+                            );
+                            if (time != null) {
+                              setDialogState(() {
+                                selectedDate = DateTime(date.year, date.month, date.day, time.hour, time.minute);
+                              });
+                            }
+                          }
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    TextButton(
+                      onPressed: () {
+                        showDialog(
+                          context: context,
+                          builder: (confirmContext) {
+                            bool isDeleting = false;
+                            return StatefulBuilder(
+                              builder: (confirmContext, setConfirmState) {
+                                return AlertDialog(
+                                  backgroundColor: const Color(0xFFFAF6EE),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(20),
+                                    side: const BorderSide(color: Color(0xFFDFBA6B), width: 1.5),
+                                  ),
+                                  title: Text(
+                                    'Delete Transaction?',
+                                    style: GoogleFonts.montserrat(
+                                      fontWeight: FontWeight.bold,
+                                      color: const Color(0xFFC62828),
+                                    ),
+                                  ),
+                                  content: Text(
+                                    'Are you sure you want to delete this transaction? This will reverse its impact on the customer\'s outstanding balance.',
+                                    style: GoogleFonts.montserrat(fontSize: 14, color: Colors.black87),
+                                  ),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: isDeleting
+                                          ? null
+                                          : () => Navigator.pop(confirmContext),
+                                      child: Text(
+                                        'Cancel',
+                                        style: GoogleFonts.montserrat(
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.grey[700],
+                                        ),
+                                      ),
+                                    ),
+                                    ElevatedButton(
+                                      onPressed: isDeleting
+                                          ? null
+                                          : () async {
+                                              setConfirmState(() => isDeleting = true);
+                                              final success = await ref
+                                                  .read(transactionNotifierProvider.notifier)
+                                                  .deleteTransaction(txn);
+                                              if (mounted) {
+                                                Navigator.pop(confirmContext);
+                                                Navigator.pop(context);
+                                                ScaffoldMessenger.of(context).showSnackBar(
+                                                  SnackBar(
+                                                    content: Text(
+                                                      success
+                                                          ? 'Transaction deleted successfully'
+                                                          : 'Failed to delete transaction',
+                                                      style: GoogleFonts.montserrat(
+                                                          fontWeight: FontWeight.w600),
+                                                    ),
+                                                    backgroundColor: success
+                                                        ? const Color(0xFF2E7D32)
+                                                        : const Color(0xFFC62828),
+                                                  ),
+                                                );
+                                              }
+                                            },
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: const Color(0xFFC62828),
+                                        shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(10)),
+                                      ),
+                                      child: isDeleting
+                                          ? const SizedBox(
+                                              width: 18,
+                                              height: 18,
+                                              child: CircularProgressIndicator(
+                                                strokeWidth: 2,
+                                                valueColor:
+                                                    AlwaysStoppedAnimation<Color>(
+                                                        Colors.white),
+                                              ),
+                                            )
+                                          : Text(
+                                              'Delete',
+                                              style: GoogleFonts.montserrat(
+                                                  fontWeight: FontWeight.bold,
+                                                  color: Colors.white),
+                                            ),
+                                    ),
+                                  ],
+                                );
+                              },
+                            );
+                          },
+                        );
+                      },
+                      child: Text(
+                        'Delete',
+                        style: GoogleFonts.montserrat(
+                          fontWeight: FontWeight.bold,
+                          color: const Color(0xFFC62828),
+                        ),
+                      ),
+                    ),
+                    Row(
+                      children: [
+                        TextButton(
+                          onPressed: isSaving ? null : () => Navigator.pop(context),
+                          child: Text(
+                            'Cancel',
+                            style: GoogleFonts.montserrat(
+                                fontWeight: FontWeight.bold, color: Colors.grey[700]),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        ElevatedButton(
+                          onPressed: isSaving
+                              ? null
+                              : () async {
+                                  final val = double.tryParse(amountController.text) ?? 0.0;
+                                  if (val <= 0) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                          content: Text('Please enter a valid amount or weight')),
+                                    );
+                                    return;
+                                  }
+
+                                  setDialogState(() => isSaving = true);
+
+                                  final isMetal = txn.metalType.isNotEmpty;
+                                  final TransactionType finalType = isMetal
+                                      ? (isIn ? TransactionType.metalIn : TransactionType.metalOut)
+                                      : (isIn ? TransactionType.receipt : TransactionType.payment);
+
+                                  String finalPurity = txn.metalPurity;
+                                  if (txn.metalType == 'gold') {
+                                    finalPurity = purityController.text.trim();
+                                  } else if (txn.metalType == 'diamond') {
+                                    finalPurity = '${piecesController.text.trim()} p';
+                                  }
+
+                                  final newTx = TransactionModel(
+                                    id: txn.id,
+                                    partyId: txn.partyId,
+                                    partyName: txn.partyName,
+                                    partyPhone: txn.partyPhone,
+                                    type: finalType,
+                                    paymentMode: txn.metalType.isEmpty ? selectedPaymentMode : txn.paymentMode,
+                                    cashAmount: txn.metalType.isEmpty ? val : txn.cashAmount,
+                                    metalType: txn.metalType,
+                                    metalWeight: txn.metalType.isNotEmpty ? val : txn.metalWeight,
+                                    metalPurity: finalPurity,
+                                    notes: notesController.text,
+                                    date: selectedDate,
+                                    createdAt: txn.createdAt,
+                                  );
+
+                                  final success = await ref
+                                      .read(transactionNotifierProvider.notifier)
+                                      .updateTransaction(oldTx: txn, newTx: newTx);
+
+                                  if (mounted) {
+                                    Navigator.pop(context);
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text(
+                                          success
+                                              ? 'Transaction updated successfully'
+                                              : 'Failed to update transaction',
+                                          style: GoogleFonts.montserrat(
+                                              fontWeight: FontWeight.w600),
+                                        ),
+                                        backgroundColor: success
+                                            ? const Color(0xFF2E7D32)
+                                            : const Color(0xFFC62828),
+                                      ),
+                                    );
+                                  }
+                                },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF4A3E1F),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10)),
+                          ),
+                          child: isSaving
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      valueColor:
+                                          AlwaysStoppedAnimation<Color>(Colors.white)),
+                                )
+                              : Text(
+                                  'Save',
+                                  style: GoogleFonts.montserrat(
+                                      fontWeight: FontWeight.bold, color: Colors.white),
+                                ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ],
             );
           },
         );

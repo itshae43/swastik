@@ -1,4 +1,4 @@
-import express, { Request, Response } from 'express';
+import express, { Request, Response, NextFunction } from 'express';
 import mongoose from 'mongoose';
 import cors from 'cors';
 import dotenv from 'dotenv';
@@ -643,8 +643,71 @@ app.delete('/api/parties/:id', async (req, res) => {
   }
 });
 
+// Authentication & Authorization Middlewares
+async function authenticate(req: Request, res: Response, next: NextFunction) {
+  try {
+    const androidId = req.headers['x-android-id'] as string;
+    const brand = req.headers['x-device-brand'] as string;
+    const staffId = req.headers['x-staff-id'] as string;
+
+    // Check if it matches an Admin
+    if (androidId && brand) {
+      if (isMongoConnected) {
+        const admin = await Admin.findOne({
+          androidId: { $regex: new RegExp(`^${androidId}$`, 'i') },
+          brand: { $regex: new RegExp(`^${brand}$`, 'i') },
+        });
+        if (admin) {
+          req.body.callerRole = 'admin';
+          return next();
+        }
+      } else {
+        const admin = fallbackAdmins.find(
+          (a) =>
+            a.androidId.toLowerCase() === androidId.toLowerCase() &&
+            a.brand.toLowerCase() === brand.toLowerCase()
+        );
+        if (admin) {
+          req.body.callerRole = 'admin';
+          return next();
+        }
+      }
+    }
+
+    // Check if it matches an approved active Staff Profile
+    if (staffId) {
+      if (isMongoConnected) {
+        const profile = await UserProfile.findById(staffId);
+        if (profile && profile.sessionActive && profile.status === 'approved') {
+          req.body.callerRole = 'staff';
+          return next();
+        }
+      } else {
+        const profile = fallbackUserProfiles.find(
+          (p) => p._id === staffId && p.sessionActive && p.status === 'approved'
+        );
+        if (profile) {
+          req.body.callerRole = 'staff';
+          return next();
+        }
+      }
+    }
+
+    return res.status(401).json({ error: 'Unauthorized: Access denied. Missing or invalid authentication headers.' });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+}
+
+function requireAdmin(req: Request, res: Response, next: NextFunction) {
+  if (req.body.callerRole === 'admin') {
+    return next();
+  }
+  return res.status(403).json({ error: 'Forbidden: Only Admins can modify or delete finalized transactions.' });
+}
+
 // CRUD Routes for Transactions
-app.get('/api/transactions', async (req, res) => {
+app.get('/api/transactions', authenticate, async (req, res) => {
   try {
     const transactions = await Transaction.find().sort({ date: -1 });
     res.json(transactions);
@@ -652,7 +715,7 @@ app.get('/api/transactions', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-app.post('/api/transactions', async (req, res) => {
+app.post('/api/transactions', authenticate, async (req, res) => {
   try {
     const newTx = new Transaction(req.body);
     const savedTx = await newTx.save();
@@ -661,7 +724,7 @@ app.post('/api/transactions', async (req, res) => {
     res.status(400).json({ error: err.message });
   }
 });
-app.put('/api/transactions/:id', async (req, res) => {
+app.put('/api/transactions/:id', authenticate, requireAdmin, async (req, res) => {
   try {
     const updatedTx = await Transaction.findByIdAndUpdate(req.params.id, req.body, { new: true });
     res.json(updatedTx);
@@ -669,7 +732,7 @@ app.put('/api/transactions/:id', async (req, res) => {
     res.status(400).json({ error: err.message });
   }
 });
-app.delete('/api/transactions/:id', async (req, res) => {
+app.delete('/api/transactions/:id', authenticate, requireAdmin, async (req, res) => {
   try {
     await Transaction.findByIdAndDelete(req.params.id);
     res.json({ message: 'Transaction deleted successfully' });
