@@ -7,6 +7,7 @@ import { Admin } from './models/Admin';
 import { Party } from './models/Party';
 import { Transaction } from './models/Transaction';
 import { Reminder } from './models/Reminder';
+import { Appointment } from './models/Appointment';
 import { UserProfile } from './models/UserProfile';
 import { DailyClosingBalance } from './models/DailyClosingBalance';
 
@@ -900,6 +901,41 @@ app.delete('/api/reminders/:id', async (req, res) => {
   try {
     await Reminder.findByIdAndDelete(req.params.id);
     res.json({ message: 'Reminder deleted successfully' });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// CRUD Routes for Appointments
+app.get('/api/appointments', async (req, res) => {
+  try {
+    const appointments = await Appointment.find().sort({ date: 1 });
+    res.json(appointments);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+app.post('/api/appointments', async (req, res) => {
+  try {
+    const newAppointment = new Appointment(req.body);
+    const savedAppointment = await newAppointment.save();
+    res.status(201).json(savedAppointment);
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+app.put('/api/appointments/:id', async (req, res) => {
+  try {
+    const updatedAppointment = await Appointment.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    res.json(updatedAppointment);
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+app.delete('/api/appointments/:id', async (req, res) => {
+  try {
+    await Appointment.findByIdAndDelete(req.params.id);
+    res.json({ message: 'Appointment deleted successfully' });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

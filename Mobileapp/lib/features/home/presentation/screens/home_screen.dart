@@ -20,6 +20,8 @@ import 'package:swastik_mobile_app/features/settings/presentation/screens/device
 import 'package:swastik_mobile_app/core/services/pdf_service.dart';
 import 'package:swastik_mobile_app/core/models/reminder_model.dart';
 import 'package:swastik_mobile_app/features/reminders/providers/reminder_providers.dart';
+import 'package:swastik_mobile_app/core/models/appointment_model.dart';
+import 'package:swastik_mobile_app/features/reminders/providers/appointment_providers.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -279,44 +281,77 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       ), // Olive-gold text matching the screenshot
                     ),
                   ),
-                  ElevatedButton.icon(
-                    onPressed: () {
-                      showDialog(
-                        context: context,
-                        barrierDismissible: true,
-                        builder: (context) => const Dialog(
-                          backgroundColor: Colors.transparent,
-                          child: TabletQuickAddEntryDialog(),
+                  Row(
+                    children: [
+                      ElevatedButton.icon(
+                        onPressed: () => _showSetAppointmentDialog(context, isTablet: true),
+                        icon: const Icon(
+                          Icons.calendar_today_outlined,
+                          color: Color(0xFF735C0F),
+                          size: 18,
                         ),
-                      );
-                    },
-                    icon: const Icon(
-                      Icons.add,
-                      color: Color(0xFF01565B),
-                      size: 18,
-                    ),
-                    label: Text(
-                      'New Entry',
-                      style: GoogleFonts.montserrat(
-                        color: const Color(0xFF01565B),
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
+                        label: Text(
+                          'Set Appointment',
+                          style: GoogleFonts.montserrat(
+                            color: const Color(0xFF735C0F),
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                          ),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFFAF6EE),
+                          elevation: 1,
+                          side: const BorderSide(color: Color(0xFFE5DEC9), width: 1.5),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 20,
+                            vertical: 14,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(30),
+                          ),
+                        ),
                       ),
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(
-                        0xFFDFBA6B,
-                      ), // Gold background
-                      elevation: 2,
-                      shadowColor: Colors.black.withOpacity(0.1),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 20,
-                        vertical: 14,
+                      const SizedBox(width: 12),
+                      ElevatedButton.icon(
+                        onPressed: () {
+                          showDialog(
+                            context: context,
+                            barrierDismissible: true,
+                            builder: (context) => const Dialog(
+                              backgroundColor: Colors.transparent,
+                              child: TabletQuickAddEntryDialog(),
+                            ),
+                          );
+                        },
+                        icon: const Icon(
+                          Icons.add,
+                          color: Color(0xFF01565B),
+                          size: 18,
+                        ),
+                        label: Text(
+                          'New Entry',
+                          style: GoogleFonts.montserrat(
+                            color: const Color(0xFF01565B),
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                          ),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(
+                            0xFFDFBA6B,
+                          ), // Gold background
+                          elevation: 2,
+                          shadowColor: Colors.black.withOpacity(0.1),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 20,
+                            vertical: 14,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(30),
+                          ),
+                        ),
                       ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(30),
-                      ),
-                    ),
+                    ],
                   ),
                 ],
               ),
@@ -1434,6 +1469,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               color: const Color(0xFF735C0F),
             ),
             overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        IconButton(
+          onPressed: () => _showSetAppointmentDialog(context, isTablet: false),
+          icon: const Icon(
+            Icons.calendar_today_outlined,
+            color: Color(0xFF4A3E1F),
+            size: 26,
           ),
         ),
         if (!isStaff)
@@ -3208,6 +3251,563 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   ],
                 ),
               ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _showSetAppointmentDialog(BuildContext context, {required bool isTablet}) {
+    final customerNameController = TextEditingController();
+    final phoneController = TextEditingController();
+    final notesController = TextEditingController();
+    final customerNameFocusNode = FocusNode();
+
+    DateTime selectedDate = DateTime.now().add(const Duration(days: 1));
+    TimeOfDay selectedTime = const TimeOfDay(hour: 14, minute: 30); // 02:30 PM default
+    bool remindBefore = false;
+    bool showAutocomplete = false;
+
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            final partiesAsync = ref.watch(partiesStreamProvider);
+            final parties = partiesAsync.value ?? [];
+            final formattedDate = DateFormat('MM / dd / yy').format(selectedDate);
+            final formattedTime = DateFormat('hh : mm a').format(
+              DateTime(2026, 1, 1, selectedTime.hour, selectedTime.minute),
+            );
+
+            return Dialog(
+              backgroundColor: Colors.white,
+              surfaceTintColor: Colors.transparent,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(24),
+              ),
+              child: Container(
+                width: isTablet ? 450 : double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // Header with Close Cross
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const SizedBox(width: 24),
+                          Text(
+                            'Set Appointment',
+                            style: GoogleFonts.montserrat(
+                              fontSize: 22,
+                              fontWeight: FontWeight.bold,
+                              color: const Color(0xFF735C0F),
+                            ),
+                          ),
+                          GestureDetector(
+                            onTap: () => Navigator.pop(context),
+                            child: const Icon(
+                              Icons.close,
+                              color: Colors.black54,
+                              size: 24,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 24),
+
+                      // Customer Name Field Header with + New Customer button
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'Customer Name',
+                            style: GoogleFonts.montserrat(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.grey[700],
+                            ),
+                          ),
+                          GestureDetector(
+                            onTap: () async {
+                              final newPartyId = await showModalBottomSheet<String>(
+                                context: context,
+                                isScrollControlled: true,
+                                backgroundColor: Colors.transparent,
+                                builder: (context) => const QuickAddPartyBottomSheet(),
+                              );
+                              if (newPartyId != null) {
+                                // Wait a split second for stream to sync, then look it up or auto-fill
+                                final updatedParties = ref.read(partiesStreamProvider).value ?? [];
+                                final matches = updatedParties.where((p) => p.id == newPartyId);
+                                final newParty = matches.isNotEmpty ? matches.first : null;
+                                if (newParty != null) {
+                                  setDialogState(() {
+                                    customerNameController.text = newParty.name;
+                                    phoneController.text = newParty.phone;
+                                    showAutocomplete = false;
+                                  });
+                                } else {
+                                  // Fallback: search by ID in a delayed manner or check if we get updates
+                                  Future.delayed(const Duration(milliseconds: 500), () {
+                                    final partiesList = ref.read(partiesStreamProvider).value;
+                                    final delayedMatches = partiesList?.where((p) => p.id == newPartyId);
+                                    final delayedParty = delayedMatches != null && delayedMatches.isNotEmpty ? delayedMatches.first : null;
+                                    if (delayedParty != null) {
+                                      setDialogState(() {
+                                        customerNameController.text = delayedParty.name;
+                                        phoneController.text = delayedParty.phone;
+                                        showAutocomplete = false;
+                                      });
+                                    }
+                                  });
+                                }
+                              }
+                            },
+                            child: Row(
+                              children: [
+                                const Icon(Icons.add, color: Color(0xFF735C0F), size: 16),
+                                const SizedBox(width: 4),
+                                Text(
+                                  'New Customer',
+                                  style: GoogleFonts.montserrat(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                    color: const Color(0xFF735C0F),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: customerNameController,
+                        focusNode: customerNameFocusNode,
+                        style: GoogleFonts.montserrat(fontSize: 14),
+                        onChanged: (value) {
+                          setDialogState(() {
+                            showAutocomplete = true;
+                          });
+                        },
+                        decoration: InputDecoration(
+                          hintText: 'Search or enter customer...',
+                          hintStyle: GoogleFonts.montserrat(color: Colors.grey[400]),
+                          prefixIcon: const Icon(Icons.person_outline, color: Color(0xFF8A7311)),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(color: const Color(0xFFE5DEC9).withOpacity(0.8)),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(color: const Color(0xFFE5DEC9).withOpacity(0.8)),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: const BorderSide(color: Color(0xFF8A7311), width: 1.5),
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                        ),
+                      ),
+
+                      // Autocomplete Overlay
+                      if (showAutocomplete) Builder(
+                        builder: (context) {
+                          final query = customerNameController.text.toLowerCase().trim();
+                          final matchingParties = query.isEmpty
+                              ? []
+                              : parties
+                                  .where((p) =>
+                                      p.name.toLowerCase().contains(query) ||
+                                      p.phone.contains(query))
+                                  .toList();
+
+                          if (matchingParties.isEmpty) return const SizedBox.shrink();
+
+                          return Container(
+                            margin: const EdgeInsets.only(top: 4),
+                            constraints: const BoxConstraints(maxHeight: 180),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: const Color(0xFFE5DEC9)),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.05),
+                                  blurRadius: 10,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
+                            ),
+                            child: ListView.separated(
+                              shrinkWrap: true,
+                              padding: EdgeInsets.zero,
+                              itemCount: matchingParties.length,
+                              separatorBuilder: (context, index) =>
+                                  const Divider(height: 1, color: Color(0xFFFAF6EE)),
+                              itemBuilder: (context, index) {
+                                final party = matchingParties[index];
+                                return ListTile(
+                                  dense: true,
+                                  leading: const CircleAvatar(
+                                    backgroundColor: Color(0xFFFAF6EE),
+                                    child: Icon(Icons.person,
+                                        color: Color(0xFF735C0F), size: 16),
+                                  ),
+                                  title: Text(
+                                    party.name,
+                                    style: GoogleFonts.montserrat(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.black87,
+                                    ),
+                                  ),
+                                  subtitle: Text(
+                                    party.phone.isNotEmpty
+                                        ? party.phone
+                                        : 'No phone saved',
+                                    style: GoogleFonts.montserrat(
+                                      fontSize: 12,
+                                      color: Colors.grey[500],
+                                    ),
+                                  ),
+                                  onTap: () {
+                                    setDialogState(() {
+                                      customerNameController.text = party.name;
+                                      phoneController.text = party.phone;
+                                      showAutocomplete = false;
+                                    });
+                                    customerNameFocusNode.unfocus();
+                                  },
+                                );
+                              },
+                            ),
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Phone Number Field (Read-only display!)
+                      Text(
+                        'Phone Number',
+                        style: GoogleFonts.montserrat(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.grey[700],
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: phoneController,
+                        readOnly: true, // Read-only, auto-filled from selection!
+                        style: GoogleFonts.montserrat(fontSize: 14, color: Colors.black87),
+                        decoration: InputDecoration(
+                          hintText: 'Auto-populated phone number',
+                          hintStyle: GoogleFonts.montserrat(color: Colors.grey[400]),
+                          prefixIcon: const Icon(Icons.phone_outlined, color: Color(0xFF8A7311)),
+                          filled: true,
+                          fillColor: const Color(0xFFFAF6EE).withOpacity(0.4),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(color: const Color(0xFFE5DEC9).withOpacity(0.5)),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(color: const Color(0xFFE5DEC9).withOpacity(0.5)),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(color: const Color(0xFFE5DEC9).withOpacity(0.5)),
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Date & Time Picker Row
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Date',
+                                  style: GoogleFonts.montserrat(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.grey[700],
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                InkWell(
+                                  onTap: () async {
+                                    final date = await showDatePicker(
+                                      context: context,
+                                      initialDate: selectedDate,
+                                      firstDate: DateTime.now(),
+                                      lastDate: DateTime.now().add(const Duration(days: 365)),
+                                      builder: (context, child) {
+                                        return Theme(
+                                          data: Theme.of(context).copyWith(
+                                            colorScheme: const ColorScheme.light(
+                                              primary: Color(0xFF735C0F),
+                                              onPrimary: Colors.white,
+                                              onSurface: Colors.black,
+                                            ),
+                                          ),
+                                          child: child!,
+                                        );
+                                      },
+                                    );
+                                    if (date != null) {
+                                      setDialogState(() {
+                                        selectedDate = date;
+                                      });
+                                    }
+                                  },
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                                    decoration: BoxDecoration(
+                                      border: Border.all(color: const Color(0xFFE5DEC9).withOpacity(0.8)),
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        const Icon(Icons.calendar_today_outlined, color: Color(0xFF8A7311), size: 20),
+                                        const SizedBox(width: 8),
+                                        Expanded(
+                                          child: Text(
+                                            formattedDate,
+                                            style: GoogleFonts.montserrat(
+                                              fontSize: 14,
+                                              color: Colors.black87,
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Time',
+                                  style: GoogleFonts.montserrat(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.grey[700],
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                InkWell(
+                                  onTap: () async {
+                                    final time = await showTimePicker(
+                                      context: context,
+                                      initialTime: selectedTime,
+                                      builder: (context, child) {
+                                        return Theme(
+                                          data: Theme.of(context).copyWith(
+                                            colorScheme: const ColorScheme.light(
+                                              primary: Color(0xFF735C0F),
+                                              onPrimary: Colors.white,
+                                              onSurface: Colors.black,
+                                            ),
+                                          ),
+                                          child: child!,
+                                        );
+                                      },
+                                    );
+                                    if (time != null) {
+                                      setDialogState(() {
+                                        selectedTime = time;
+                                      });
+                                    }
+                                  },
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                                    decoration: BoxDecoration(
+                                      border: Border.all(color: const Color(0xFFE5DEC9).withOpacity(0.8)),
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        const Icon(Icons.access_time_outlined, color: Color(0xFF8A7311), size: 20),
+                                        const SizedBox(width: 8),
+                                        Expanded(
+                                          child: Text(
+                                            formattedTime,
+                                            style: GoogleFonts.montserrat(
+                                              fontSize: 14,
+                                              color: Colors.black87,
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Appointment Notes Field
+                      Text(
+                        'Appointment Notes',
+                        style: GoogleFonts.montserrat(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.grey[700],
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: notesController,
+                        maxLines: 3,
+                        style: GoogleFonts.montserrat(fontSize: 14),
+                        decoration: InputDecoration(
+                          hintText: 'Coming to pick up custom gold chain',
+                          hintStyle: GoogleFonts.montserrat(color: Colors.grey[400]),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(color: const Color(0xFFE5DEC9).withOpacity(0.8)),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(color: const Color(0xFFE5DEC9).withOpacity(0.8)),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: const BorderSide(color: Color(0xFF8A7311), width: 1.5),
+                          ),
+                          contentPadding: const EdgeInsets.all(16),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+
+                      // Custom Switch Toggle
+                      Row(
+                        children: [
+                          const Icon(Icons.notifications_active_outlined, color: Color(0xFF735C0F), size: 22),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Remind me 1 day before',
+                              style: GoogleFonts.montserrat(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.black87,
+                              ),
+                            ),
+                          ),
+                          Switch(
+                            value: remindBefore,
+                            activeColor: const Color(0xFF735C0F),
+                            activeTrackColor: const Color(0xFF735C0F).withOpacity(0.2),
+                            inactiveThumbColor: Colors.grey[400],
+                            inactiveTrackColor: Colors.grey[200],
+                            onChanged: (val) {
+                              setDialogState(() {
+                                remindBefore = val;
+                              });
+                            },
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 24),
+
+                      // Set Appointment Button
+                      ElevatedButton(
+                        onPressed: () async {
+                          if (customerNameController.text.trim().isEmpty) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Please enter a Customer Name')),
+                            );
+                            return;
+                          }
+
+                          final dateVal = DateTime(
+                            selectedDate.year,
+                            selectedDate.month,
+                            selectedDate.day,
+                            selectedTime.hour,
+                            selectedTime.minute,
+                          );
+
+                          await ref.read(appointmentNotifierProvider.notifier).createAppointment(
+                                customerName: customerNameController.text.trim(),
+                                phoneNumber: phoneController.text.trim(),
+                                date: dateVal,
+                                notes: notesController.text.trim(),
+                                remindBefore: remindBefore,
+                              );
+
+                          if (context.mounted) {
+                            Navigator.pop(context);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Appointment set successfully')),
+                            );
+                          }
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF735C0F),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          elevation: 0,
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(Icons.calendar_today_outlined, color: Colors.white, size: 18),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Set Appointment',
+                              style: GoogleFonts.montserrat(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Cancel Text Button
+                      TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: Text(
+                          'Cancel',
+                          style: GoogleFonts.montserrat(
+                            color: Colors.grey[600],
+                            fontWeight: FontWeight.w600,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             );
           },
         );
