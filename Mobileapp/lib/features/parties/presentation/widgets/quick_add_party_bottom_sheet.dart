@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:swastik_mobile_app/core/utils/responsive_utils.dart';
+import 'package:flutter_contacts/flutter_contacts.dart';
+import 'package:permission_handler/permission_handler.dart' as ph;
+import 'package:swastik_mobile_app/features/auth/providers/auth_providers.dart';
 import '../../providers/party_providers.dart';
 
 class QuickAddPartyBottomSheet extends ConsumerStatefulWidget {
@@ -18,17 +20,135 @@ class _QuickAddPartyBottomSheetState extends ConsumerState<QuickAddPartyBottomSh
   final _addressController = TextEditingController();
   bool _isSaved = false;
 
+  // Contact sync state variables
+  final _contactSearchController = TextEditingController();
+  final _addressFocusNode = FocusNode();
+  List<Contact> _allContacts = [];
+  List<Contact> _filteredContacts = [];
+  bool _isLoadingContacts = false;
+  bool _hasContactPermission = false;
+  bool _permissionChecked = false;
+  bool _isSyncing = false;
+
   @override
   void dispose() {
     _nameController.dispose();
     _phoneController.dispose();
     _addressController.dispose();
+    _contactSearchController.dispose();
+    _addressFocusNode.dispose();
     super.dispose();
+  }
+
+  Future<void> _checkAndRequestPermission({bool forceSync = false}) async {
+    if (_isSyncing) return;
+
+    setState(() {
+      _isLoadingContacts = true;
+      if (forceSync) _isSyncing = true;
+    });
+
+    try {
+      final status = await ph.Permission.contacts.status;
+      if (status.isGranted && !forceSync) {
+        setState(() {
+          _hasContactPermission = true;
+          _permissionChecked = true;
+        });
+        await _fetchContacts();
+      } else {
+        final result = await ph.Permission.contacts.request();
+        setState(() {
+          _hasContactPermission = result.isGranted;
+          _permissionChecked = true;
+        });
+        if (result.isGranted) {
+          await _fetchContacts();
+        } else {
+          setState(() {
+            _isLoadingContacts = false;
+            _isSyncing = false;
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('Error checking contact permission: $e');
+      setState(() {
+        _isLoadingContacts = false;
+        _isSyncing = false;
+      });
+    }
+  }
+
+  Future<void> _fetchContacts() async {
+    try {
+      final contacts = await FlutterContacts.getAll(properties: {ContactProperty.name, ContactProperty.phone});
+      setState(() {
+        _allContacts = contacts;
+        _isLoadingContacts = false;
+        _isSyncing = false;
+      });
+      if (_contactSearchController.text.isNotEmpty) {
+        _filterContacts(_contactSearchController.text);
+      }
+    } catch (e) {
+      debugPrint('Error fetching contacts: $e');
+      setState(() {
+        _isLoadingContacts = false;
+        _isSyncing = false;
+      });
+    }
+  }
+
+  void _filterContacts(String query) {
+    final search = query.toLowerCase().trim();
+    if (search.isEmpty) {
+      setState(() {
+        _filteredContacts = [];
+      });
+      return;
+    }
+
+    setState(() {
+      _filteredContacts = _allContacts.where((contact) {
+        final name = (contact.displayName ?? '').toLowerCase();
+        final matchesName = name.contains(search);
+
+        final matchesPhone = contact.phones.any((phone) {
+          final cleanNum = phone.number.replaceAll(RegExp(r'\D'), '');
+          return cleanNum.contains(search);
+        });
+
+        return matchesName || matchesPhone;
+      }).toList();
+    });
+  }
+
+  void _selectContact(Contact contact) {
+    setState(() {
+      _nameController.text = contact.displayName ?? '';
+      if (contact.phones.isNotEmpty) {
+        String phoneStr = contact.phones.first.number;
+        String cleanPhone = phoneStr.replaceAll(RegExp(r'\D'), '');
+        if (cleanPhone.length > 10) {
+          cleanPhone = cleanPhone.substring(cleanPhone.length - 10);
+        }
+        _phoneController.text = cleanPhone;
+      } else {
+        _phoneController.text = '';
+      }
+      _contactSearchController.clear();
+      _filteredContacts = [];
+    });
+
+    FocusScope.of(context).requestFocus(_addressFocusNode);
   }
 
   @override
   Widget build(BuildContext context) {
     final isTablet = AppResponsive.isTablet(context);
+    final isStaff = ref.watch(isStaffProvider);
+    final isAdmin = !isStaff;
     return Container(
       decoration: BoxDecoration(
         color: isTablet ? const Color(0xFFFAF6EE) : const Color(0xFFFDFBF7),
@@ -63,6 +183,10 @@ class _QuickAddPartyBottomSheetState extends ConsumerState<QuickAddPartyBottomSh
               ],
             ),
             const SizedBox(height: 24),
+            if (isAdmin) ...[
+              _buildContactSearchField(),
+              const SizedBox(height: 16),
+            ],
             _buildTextField(
               label: 'Full Name *',
               hint: 'e.g. Ramesh Jewellers',
@@ -77,6 +201,7 @@ class _QuickAddPartyBottomSheetState extends ConsumerState<QuickAddPartyBottomSh
               hint: 'Complete billing/shipping address',
               maxLines: 3,
               controller: _addressController,
+              focusNode: _addressFocusNode,
             ),
             const SizedBox(height: 32),
             SizedBox(
@@ -161,6 +286,7 @@ class _QuickAddPartyBottomSheetState extends ConsumerState<QuickAddPartyBottomSh
     IconData? prefixIcon,
     int maxLines = 1,
     TextEditingController? controller,
+    FocusNode? focusNode,
   }) {
     List<TextSpan> labelSpans = [];
     if (label.contains('*')) {
@@ -193,6 +319,7 @@ class _QuickAddPartyBottomSheetState extends ConsumerState<QuickAddPartyBottomSh
           ),
           child: TextField(
             maxLines: maxLines,
+            focusNode: focusNode,
             decoration: InputDecoration(
               hintText: hint,
               hintStyle: GoogleFonts.montserrat(color: Colors.grey[400]),
@@ -279,6 +406,148 @@ class _QuickAddPartyBottomSheetState extends ConsumerState<QuickAddPartyBottomSh
             ],
           ),
         ),
+      ],
+    );
+  }
+
+  Widget _buildContactSearchField() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Quick Search Phone Contacts',
+          style: GoogleFonts.montserrat(
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+            color: Colors.grey[800],
+          ),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: const Color(0xFFE0D8C3)),
+            color: Colors.white,
+          ),
+          child: TextField(
+            controller: _contactSearchController,
+            onTap: () {
+              if (!_permissionChecked) {
+                _checkAndRequestPermission();
+              }
+            },
+            onChanged: (val) {
+              if (!_permissionChecked) {
+                _checkAndRequestPermission();
+              } else {
+                _filterContacts(val);
+              }
+            },
+            decoration: InputDecoration(
+              hintText: 'Search contacts by name or number...',
+              hintStyle: GoogleFonts.montserrat(color: Colors.grey[400]),
+              border: InputBorder.none,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              prefixIcon: Icon(Icons.search, color: Colors.grey[400]),
+              suffixIcon: _isLoadingContacts
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: Padding(
+                        padding: EdgeInsets.all(12.0),
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Color(0xFF755E0B),
+                        ),
+                      ),
+                    )
+                  : IconButton(
+                      icon: Icon(
+                        _permissionChecked && _hasContactPermission
+                            ? Icons.sync
+                            : Icons.lock_outline,
+                        color: const Color(0xFF755E0B),
+                        size: 20,
+                      ),
+                      onPressed: () {
+                        _checkAndRequestPermission(forceSync: true);
+                      },
+                      tooltip: 'Sync Device Contacts',
+                    ),
+            ),
+            style: GoogleFonts.montserrat(
+              fontSize: 15,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ),
+        if (_permissionChecked && !_hasContactPermission) ...[
+          const SizedBox(height: 4),
+          Text(
+            'Contact permission is denied. Tap sync icon to request permission.',
+            style: GoogleFonts.montserrat(
+              fontSize: 11,
+              color: Colors.red[700],
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+        if (_filteredContacts.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Container(
+            constraints: const BoxConstraints(maxHeight: 180),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: const Color(0xFFE0D8C3)),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: ListView.separated(
+              shrinkWrap: true,
+              padding: EdgeInsets.zero,
+              itemCount: _filteredContacts.length,
+              separatorBuilder: (context, index) => const Divider(
+                height: 1,
+                color: Color(0xFFFAF6EE),
+              ),
+              itemBuilder: (context, index) {
+                final contact = _filteredContacts[index];
+                final phone = contact.phones.isNotEmpty
+                    ? contact.phones.first.number
+                    : 'No phone number';
+                return ListTile(
+                  dense: true,
+                  leading: const CircleAvatar(
+                    backgroundColor: Color(0xFFFAF6EE),
+                    child: Icon(Icons.person, color: Color(0xFF755E0B), size: 18),
+                  ),
+                  title: Text(
+                    contact.displayName ?? '',
+                    style: GoogleFonts.montserrat(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.grey[800],
+                    ),
+                  ),
+                  subtitle: Text(
+                    phone,
+                    style: GoogleFonts.montserrat(
+                      fontSize: 12,
+                      color: Colors.grey[500],
+                    ),
+                  ),
+                  onTap: () => _selectContact(contact),
+                );
+              },
+            ),
+          ),
+        ],
       ],
     );
   }

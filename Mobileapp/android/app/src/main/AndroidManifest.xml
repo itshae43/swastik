@@ -1,6 +1,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <!-- Allow internet access -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Allow reading contacts for Admin contact-sync feature -->
+    <uses-permission android:name="android.permission.READ_CONTACTS"/>
     <application
         android:label="Swastik"
         android:name="${applicationName}"

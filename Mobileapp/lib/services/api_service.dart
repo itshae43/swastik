@@ -266,6 +266,17 @@ class ApiService {
   }
 
   // ──────────────────────────────────────────────────────────────────────
+  //  Daily Balances
+  // ──────────────────────────────────────────────────────────────────────
+
+  /// GET /api/daily-balances — fetch all saved daily closing balances.
+  Future<List<dynamic>> getDailyBalances() async {
+    final res = await http.get(Uri.parse('$_base/api/daily-balances'), headers: _getHeaders());
+    _assertOk(res);
+    return jsonDecode(res.body) as List<dynamic>;
+  }
+
+  // ──────────────────────────────────────────────────────────────────────
   //  Helpers
   // ──────────────────────────────────────────────────────────────────────
 

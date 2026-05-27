@@ -2,6 +2,8 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>NSContactsUsageDescription</key>
+	<string>This app requires contact permission to allow administrators to search and import party names and phone numbers directly from the device contact list.</string>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>CFBundleDevelopmentRegion</key>

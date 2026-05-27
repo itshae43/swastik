@@ -120,6 +120,7 @@ class _TransactionStatementScreenState extends ConsumerState<TransactionStatemen
   @override
   Widget build(BuildContext context) {
     final transactionsAsync = ref.watch(transactionsStreamProvider);
+    final dailyBalancesAsync = ref.watch(dailyBalancesStreamProvider);
     final isTablet = AppResponsive.isTablet(context);
 
     return Scaffold(
@@ -477,19 +478,85 @@ class _TransactionStatementScreenState extends ConsumerState<TransactionStatemen
                               headerText = DateFormat('EEEE, d MMM yyyy').format(parsedDate);
                             }
 
+                            // Calculate daily closing balance for dateKey
+                            double closingVal = 0.0;
+                            bool hasSavedBalance = false;
+
+                            if (dailyBalancesAsync.hasValue) {
+                              final dailyBalances = dailyBalancesAsync.value ?? [];
+                              final matches = dailyBalances.where((b) => b.date == dateKey);
+                              final matchingBalance = matches.isNotEmpty ? matches.first : null;
+                              if (matchingBalance != null) {
+                                hasSavedBalance = true;
+                                if (widget.category == 'cash') {
+                                  closingVal = matchingBalance.closingCash;
+                                } else if (widget.category == 'online') {
+                                  closingVal = matchingBalance.closingOnline;
+                                } else if (widget.category == 'gold') {
+                                  closingVal = matchingBalance.closingGold;
+                                } else if (widget.category == 'diamond') {
+                                  closingVal = matchingBalance.closingDiamond;
+                                }
+                              }
+                            }
+
+                            if (!hasSavedBalance) {
+                              // Dynamic fallback calculation: sum all category transactions occurring on or before dateKey
+                              double runningSum = 0.0;
+                              for (final t in categoryTxns) {
+                                final tDateStr = DateFormat('yyyy-MM-dd').format(t.date);
+                                if (tDateStr.compareTo(dateKey) <= 0) {
+                                  final isCredit = t.type == TransactionType.receipt || t.type == TransactionType.metalIn;
+                                  final isDebit = t.type == TransactionType.payment || t.type == TransactionType.metalOut;
+                                  final val = t.metalType.isEmpty ? t.cashAmount : t.metalWeight;
+                                  if (isCredit) {
+                                    runningSum += val;
+                                  } else if (isDebit) {
+                                    runningSum -= val;
+                                  }
+                                }
+                              }
+                              closingVal = runningSum;
+                            }
+
+                            final isToday = dateKey == todayStr;
+                            String closingBalanceStr = '';
+                            if (!isToday) {
+                              final prefix = 'Closing: ';
+                              if (widget.category == 'cash' || widget.category == 'online') {
+                                closingBalanceStr = '$prefix₹${NumberFormat.decimalPattern('en_IN').format(closingVal)}';
+                              } else {
+                                closingBalanceStr = '$prefix${closingVal % 1 == 0 ? closingVal.toInt().toString() : closingVal.toStringAsFixed(3).replaceAll(RegExp(r'\.?0+$'), '')} $_categoryUnit';
+                              }
+                            }
+
                             return Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 // Date Header
                                 Padding(
-                                  padding: const EdgeInsets.only(top: 16.0, bottom: 8.0, left: 4.0),
-                                  child: Text(
-                                    headerText,
-                                    style: GoogleFonts.montserrat(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.bold,
-                                      color: const Color(0xFF735C0F),
-                                    ),
+                                  padding: const EdgeInsets.only(top: 16.0, bottom: 8.0, left: 4.0, right: 4.0),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Text(
+                                        headerText,
+                                        style: GoogleFonts.montserrat(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.bold,
+                                          color: const Color(0xFF735C0F),
+                                        ),
+                                      ),
+                                      if (closingBalanceStr.isNotEmpty)
+                                        Text(
+                                          closingBalanceStr,
+                                          style: GoogleFonts.montserrat(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.bold,
+                                            color: const Color(0xFF735C0F),
+                                          ),
+                                        ),
+                                    ],
                                   ),
                                 ),
 

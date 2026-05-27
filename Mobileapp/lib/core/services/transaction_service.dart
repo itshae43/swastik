@@ -3,6 +3,7 @@ import 'package:http/http.dart' as http;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/transaction_model.dart';
 import '../models/party_model.dart';
+import '../models/daily_closing_balance_model.dart';
 import '../utils/time_utils.dart';
 import 'package:swastik_mobile_app/core/utils/device_identity.dart';
 import 'package:swastik_mobile_app/features/auth/providers/auth_providers.dart';
@@ -278,4 +279,22 @@ class TransactionService {
       await Future.delayed(const Duration(seconds: 3));
     }
   }
+
+  Stream<List<DailyClosingBalanceModel>> dailyBalancesStream() async* {
+    while (true) {
+      try {
+        final res = await http.get(
+          Uri.parse('$baseUrl/daily-balances'),
+          headers: _getHeaders(),
+        );
+        if (res.statusCode == 200) {
+          final List data = jsonDecode(res.body);
+          final list = data.map((e) => DailyClosingBalanceModel.fromMap(e as Map<String, dynamic>)).toList();
+          yield list;
+        }
+      } catch (e) {}
+      await Future.delayed(const Duration(seconds: 3));
+    }
+  }
 }
+

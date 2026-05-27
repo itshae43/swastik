@@ -1,9 +1,10 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:swastik_mobile_app/core/models/transaction_model.dart';
 import 'package:swastik_mobile_app/core/services/transaction_service.dart';
-import 'package:swastik_mobile_app/features/auth/providers/auth_providers.dart';
 import 'package:swastik_mobile_app/core/utils/constants.dart';
 import 'package:swastik_mobile_app/core/utils/time_utils.dart';
+
+import 'package:swastik_mobile_app/core/models/daily_closing_balance_model.dart';
 
 final transactionServiceProvider = Provider<TransactionService>((ref) => TransactionService(ref));
 
@@ -13,6 +14,10 @@ final transactionsStreamProvider = StreamProvider<List<TransactionModel>>((ref) 
 
 final partyTransactionsStreamProvider = StreamProvider.family<List<TransactionModel>, String>((ref, partyId) {
   return ref.watch(transactionServiceProvider).partyTransactionsStream(AppConstants.centralDbId, partyId);
+});
+
+final dailyBalancesStreamProvider = StreamProvider<List<DailyClosingBalanceModel>>((ref) {
+  return ref.watch(transactionServiceProvider).dailyBalancesStream();
 });
 
 

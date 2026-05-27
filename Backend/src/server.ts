@@ -8,6 +8,7 @@ import { Party } from './models/Party';
 import { Transaction } from './models/Transaction';
 import { Reminder } from './models/Reminder';
 import { UserProfile } from './models/UserProfile';
+import { DailyClosingBalance } from './models/DailyClosingBalance';
 
 // Force use of reliable public DNS to prevent SRV ETIMEOUT on some networks
 dns.setServers(['8.8.8.8', '1.1.1.1']);
@@ -65,6 +66,7 @@ mongoose
     isMongoConnected = true;
     console.log('Admin seeding on startup is disabled.');
     seedUserProfile();
+    await recalculateDailyBalances();
   })
   .catch((err) => {
     console.error('================================================================');
@@ -608,6 +610,130 @@ app.post('/api/user-profiles/:id/decline', async (req: Request, res: Response) =
   }
 });
 
+// Fallback for daily closing balances when MongoDB is not connected
+let fallbackDailyClosingBalances: any[] = [];
+
+// Helper to convert date to IST date string YYYY-MM-DD
+function getISTDateString(date: Date): string {
+  const utcMs = date.getTime();
+  const istOffsetMs = 5.5 * 60 * 60 * 1000;
+  const istDate = new Date(utcMs + istOffsetMs);
+  const yyyy = istDate.getUTCFullYear();
+  const mm = String(istDate.getUTCMonth() + 1).padStart(2, '0');
+  const dd = String(istDate.getUTCDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+// Recalculates closing balances and propagates them daily
+export async function recalculateDailyBalances(): Promise<void> {
+  try {
+    if (!isMongoConnected) {
+      console.log('[DAILY BALANCE RECALCULATION] Skipping database recalculation (MongoDB not connected).');
+      return;
+    }
+
+    // 1. Get all transactions sorted by date ascending
+    const transactions = await Transaction.find().sort({ date: 1 });
+    if (transactions.length === 0) {
+      await DailyClosingBalance.deleteMany({});
+      return;
+    }
+
+    // 2. Clear all existing records for a fresh recalculation
+    await DailyClosingBalance.deleteMany({});
+
+    // 3. Keep running sum of balances
+    let runningCash = 0;
+    let runningOnline = 0;
+    let runningGold = 0;
+    let runningDiamond = 0;
+
+    // Group transactions by their local IST date
+    const txByDate: { [dateStr: string]: any[] } = {};
+    for (const tx of transactions) {
+      const dStr = getISTDateString(tx.date);
+      if (!txByDate[dStr]) {
+        txByDate[dStr] = [];
+      }
+      txByDate[dStr].push(tx);
+    }
+
+    // Loop through each day from the first transaction's date up to today (IST)
+    const firstTxDate = transactions[0].date;
+    const current = new Date(firstTxDate.getTime() + 5.5 * 60 * 60 * 1000);
+    current.setUTCHours(0, 0, 0, 0);
+
+    const end = new Date(new Date().getTime() + 5.5 * 60 * 60 * 1000);
+    end.setUTCHours(0, 0, 0, 0);
+
+    while (current.getTime() <= end.getTime()) {
+      const yyyy = current.getUTCFullYear();
+      const mm = String(current.getUTCMonth() + 1).padStart(2, '0');
+      const dd = String(current.getUTCDate()).padStart(2, '0');
+      const dateStr = `${yyyy}-${mm}-${dd}`;
+
+      // Apply transactions on this day
+      const dayTxs = txByDate[dateStr] || [];
+      for (const tx of dayTxs) {
+        const isCredit = tx.type === 'receipt' || tx.type === 'metalIn';
+        const isDebit = tx.type === 'payment' || tx.type === 'metalOut';
+        const val = tx.metalType ? tx.metalWeight : tx.cashAmount;
+
+        if (!tx.metalType) {
+          if (tx.paymentMode === 'cash') {
+            if (isCredit) runningCash += val;
+            if (isDebit) runningCash -= val;
+          } else if (tx.paymentMode === 'online' || tx.paymentMode === 'upi' || tx.paymentMode === 'rtgs') {
+            if (isCredit) runningOnline += val;
+            if (isDebit) runningOnline -= val;
+          }
+        } else if (tx.metalType === 'gold') {
+          if (isCredit) runningGold += val;
+          if (isDebit) runningGold -= val;
+        } else if (tx.metalType === 'diamond') {
+          if (isCredit) runningDiamond += val;
+          if (isDebit) runningDiamond -= val;
+        }
+      }
+
+      // Save daily closing balance
+      await DailyClosingBalance.findOneAndUpdate(
+        { date: dateStr },
+        {
+          date: dateStr,
+          closingCash: runningCash,
+          closingOnline: runningOnline,
+          closingGold: runningGold,
+          closingDiamond: runningDiamond,
+        },
+        { upsert: true, new: true }
+      );
+
+      // Increment day
+      current.setUTCDate(current.getUTCDate() + 1);
+    }
+
+    console.log('[DAILY BALANCE RECALCULATION] Successfully completed.');
+  } catch (error) {
+    console.error('[DAILY BALANCE RECALCULATION] Error: ', error);
+  }
+}
+
+// GET endpoint to retrieve daily closing balances
+app.get('/api/daily-balances', async (req, res) => {
+  try {
+    await recalculateDailyBalances();
+    if (isMongoConnected) {
+      const balances = await DailyClosingBalance.find().sort({ date: 1 });
+      res.json(balances);
+    } else {
+      res.json(fallbackDailyClosingBalances);
+    }
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // CRUD Routes for Parties
 app.get('/api/parties', async (req, res) => {
   try {
@@ -719,6 +845,7 @@ app.post('/api/transactions', authenticate, async (req, res) => {
   try {
     const newTx = new Transaction(req.body);
     const savedTx = await newTx.save();
+    await recalculateDailyBalances();
     res.status(201).json(savedTx);
   } catch (err: any) {
     res.status(400).json({ error: err.message });
@@ -727,6 +854,7 @@ app.post('/api/transactions', authenticate, async (req, res) => {
 app.put('/api/transactions/:id', authenticate, requireAdmin, async (req, res) => {
   try {
     const updatedTx = await Transaction.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    await recalculateDailyBalances();
     res.json(updatedTx);
   } catch (err: any) {
     res.status(400).json({ error: err.message });
@@ -735,6 +863,7 @@ app.put('/api/transactions/:id', authenticate, requireAdmin, async (req, res) =>
 app.delete('/api/transactions/:id', authenticate, requireAdmin, async (req, res) => {
   try {
     await Transaction.findByIdAndDelete(req.params.id);
+    await recalculateDailyBalances();
     res.json({ message: 'Transaction deleted successfully' });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
