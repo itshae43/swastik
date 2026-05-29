@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:swastik_mobile_app/core/services/notification_service.dart';
 import 'package:swastik_mobile_app/core/utils/responsive_utils.dart';
+import 'package:swastik_mobile_app/features/reminders/providers/reminder_navigation_provider.dart';
 
 import '../../../home/presentation/screens/home_screen.dart';
 import '../../../entries/presentation/screens/entries_screen.dart';
@@ -19,11 +21,12 @@ class MainScreen extends ConsumerStatefulWidget {
 }
 
 class _MainScreenState extends ConsumerState<MainScreen>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   late AnimationController _fadeController;
   late Animation<double> _fadeAnimation;
   late Animation<double> _scaleAnimation;
   late Animation<Offset> _slideAnimation;
+  late final NotificationNavigationHandler _notificationNavigationHandler;
   bool _isSidebarCollapsed = false;
 
   // Persistent GlobalKey to reparent the bodyContent smoothly on orientation change
@@ -32,6 +35,8 @@ class _MainScreenState extends ConsumerState<MainScreen>
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _notificationNavigationHandler = _handleNotificationNavigation;
     _fadeController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 350),
@@ -41,27 +46,52 @@ class _MainScreenState extends ConsumerState<MainScreen>
       curve: Curves.easeIn,
     );
     _scaleAnimation = Tween<double>(begin: 0.96, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _fadeController,
-        curve: Curves.easeOutCubic,
-      ),
+      CurvedAnimation(parent: _fadeController, curve: Curves.easeOutCubic),
     );
-    _slideAnimation = Tween<Offset>(
-      begin: const Offset(0.0, 0.02),
-      end: Offset.zero,
-    ).animate(
-      CurvedAnimation(
-        parent: _fadeController,
-        curve: Curves.easeOutCubic,
-      ),
-    );
+    _slideAnimation =
+        Tween<Offset>(begin: const Offset(0.0, 0.02), end: Offset.zero).animate(
+          CurvedAnimation(parent: _fadeController, curve: Curves.easeOutCubic),
+        );
     _fadeController.forward();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      NotificationService().setNavigationHandler(
+        _notificationNavigationHandler,
+      );
+      NotificationService().repairSchedulesFromServer(force: true);
+    });
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    NotificationService().clearNavigationHandler(
+      _notificationNavigationHandler,
+    );
     _fadeController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      NotificationService().repairSchedulesFromServer(force: true);
+    }
+  }
+
+  void _handleNotificationNavigation(NotificationNavigationTarget target) {
+    ref.read(navigationProvider.notifier).setIndex(3);
+
+    final reminderNavigation = ref.read(reminderNavigationProvider.notifier);
+    switch (target.type) {
+      case NotificationNavigationType.reminder:
+        reminderNavigation.showReminders(filter: 'All');
+        break;
+      case NotificationNavigationType.appointment:
+        reminderNavigation.showAppointments(filter: 'All');
+        break;
+    }
   }
 
   @override
@@ -119,7 +149,9 @@ class _MainScreenState extends ConsumerState<MainScreen>
     }
 
     return Scaffold(
-      backgroundColor: isTablet ? const Color(0xFFFAF6EE) : const Color(0xFFFDFBF7),
+      backgroundColor: isTablet
+          ? const Color(0xFFFAF6EE)
+          : const Color(0xFFFDFBF7),
       body: bodyContent,
       bottomNavigationBar: showSidebar ? null : const CustomBottomNavBar(),
     );

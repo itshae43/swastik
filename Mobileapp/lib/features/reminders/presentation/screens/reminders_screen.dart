@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import 'package:swastik_mobile_app/features/reminders/providers/reminder_providers.dart';
 import 'package:swastik_mobile_app/core/models/reminder_model.dart';
 import 'package:swastik_mobile_app/features/reminders/providers/appointment_providers.dart';
+import 'package:swastik_mobile_app/features/reminders/providers/reminder_navigation_provider.dart';
 import 'package:swastik_mobile_app/core/models/appointment_model.dart';
 import 'package:swastik_mobile_app/core/utils/communication_utils.dart';
 import 'package:swastik_mobile_app/core/utils/responsive_utils.dart';
@@ -21,14 +22,17 @@ class _RemindersScreenState extends ConsumerState<RemindersScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   String _selectedFilter = 'Today';
+  int _lastTabIndex = 0;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
     _tabController.addListener(() {
-      if (_tabController.indexIsChanging) {
-        setState(() {});
+      if (_lastTabIndex != _tabController.index) {
+        setState(() {
+          _lastTabIndex = _tabController.index;
+        });
       }
     });
   }
@@ -41,6 +45,25 @@ class _RemindersScreenState extends ConsumerState<RemindersScreen>
 
   @override
   Widget build(BuildContext context) {
+    ref.listen<ReminderNavigationRequest?>(reminderNavigationProvider, (
+      previous,
+      next,
+    ) {
+      if (next == null) return;
+
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+
+        if (_tabController.index != next.tabIndex) {
+          _tabController.animateTo(next.tabIndex);
+        }
+        setState(() {
+          _selectedFilter = next.filter;
+          _lastTabIndex = next.tabIndex;
+        });
+      });
+    });
+
     final isTablet = AppResponsive.isTablet(context);
     return Container(
       color: isTablet ? const Color(0xFFFAF6EE) : const Color(0xFFFDFBF7),
@@ -93,20 +116,26 @@ class _RemindersScreenState extends ConsumerState<RemindersScreen>
   }
 
   Widget _buildHeader(bool isTablet) {
-    final title = _tabController.index == 0 ? 'Upcoming Calls' : 'Upcoming Appointments';
+    final title = _tabController.index == 0
+        ? 'Upcoming Calls'
+        : 'Upcoming Appointments';
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: isTablet ? 22.0 : 16.0),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(
-            title,
-            style: GoogleFonts.montserrat(
-              fontSize: isTablet ? 22 : 20,
-              fontWeight: FontWeight.bold,
-              color: Colors.black87,
+          Expanded(
+            child: Text(
+              title,
+              style: GoogleFonts.montserrat(
+                fontSize: isTablet ? 22 : 20,
+                fontWeight: FontWeight.bold,
+                color: Colors.black87,
+              ),
+              overflow: TextOverflow.ellipsis,
             ),
           ),
+          const SizedBox(width: 8),
           Container(
             padding: EdgeInsets.symmetric(
               horizontal: isTablet ? 14 : 12,
@@ -156,7 +185,9 @@ class _RemindersScreenState extends ConsumerState<RemindersScreen>
     if (_selectedFilter == 'Today') {
       return items.where((item) {
         final date = getDate(item);
-        return date.year == now.year && date.month == now.month && date.day == now.day;
+        return date.year == now.year &&
+            date.month == now.month &&
+            date.day == now.day;
       }).toList();
     } else if (_selectedFilter == 'This Week') {
       final monday = now.subtract(Duration(days: now.weekday - 1));
@@ -165,7 +196,8 @@ class _RemindersScreenState extends ConsumerState<RemindersScreen>
       final end = DateTime(sunday.year, sunday.month, sunday.day, 23, 59, 59);
       return items.where((item) {
         final date = getDate(item);
-        return date.isAfter(start.subtract(const Duration(seconds: 1))) && date.isBefore(end.add(const Duration(seconds: 1)));
+        return date.isAfter(start.subtract(const Duration(seconds: 1))) &&
+            date.isBefore(end.add(const Duration(seconds: 1)));
       }).toList();
     }
     return items;
@@ -426,7 +458,9 @@ class _RemindersScreenState extends ConsumerState<RemindersScreen>
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(
-                        appointment.notes.isNotEmpty ? appointment.notes : 'No additional notes.',
+                        appointment.notes.isNotEmpty
+                            ? appointment.notes
+                            : 'No additional notes.',
                         style: GoogleFonts.montserrat(
                           fontSize: isTablet ? 14 : 12,
                           color: Colors.grey[800],
@@ -460,8 +494,10 @@ class _RemindersScreenState extends ConsumerState<RemindersScreen>
                           ),
                           const Spacer(),
                           TextButton(
-                            onPressed: () =>
-                                _showEditAppointmentDialog(appointment, isTablet),
+                            onPressed: () => _showEditAppointmentDialog(
+                              appointment,
+                              isTablet,
+                            ),
                             child: Text(
                               'Edit',
                               style: GoogleFonts.montserrat(
@@ -510,8 +546,12 @@ class _RemindersScreenState extends ConsumerState<RemindersScreen>
 
   void _showEditAppointmentDialog(AppointmentModel appointment, bool isTablet) {
     final notesController = TextEditingController(text: appointment.notes);
-    final nameController = TextEditingController(text: appointment.customerName);
-    final phoneController = TextEditingController(text: appointment.phoneNumber);
+    final nameController = TextEditingController(
+      text: appointment.customerName,
+    );
+    final phoneController = TextEditingController(
+      text: appointment.phoneNumber,
+    );
     DateTime selectedDate = appointment.date;
     bool remindBefore = appointment.remindBefore;
 
@@ -625,7 +665,9 @@ class _RemindersScreenState extends ConsumerState<RemindersScreen>
                 InkWell(
                   onTap: () async {
                     final now = TimeUtils.now;
-                    final firstDate = selectedDate.isBefore(now) ? selectedDate : now;
+                    final firstDate = selectedDate.isBefore(now)
+                        ? selectedDate
+                        : now;
                     final date = await showDatePicker(
                       context: context,
                       initialDate: selectedDate,
@@ -693,7 +735,9 @@ class _RemindersScreenState extends ConsumerState<RemindersScreen>
                         SizedBox(width: isTablet ? 12 : 10),
                         Expanded(
                           child: Text(
-                            DateFormat('dd MMM yyyy • hh:mm a').format(selectedDate),
+                            DateFormat(
+                              'dd MMM yyyy • hh:mm a',
+                            ).format(selectedDate),
                             style: GoogleFonts.montserrat(
                               fontSize: isTablet ? 15 : 14,
                               fontWeight: FontWeight.w500,
@@ -713,7 +757,11 @@ class _RemindersScreenState extends ConsumerState<RemindersScreen>
                 SizedBox(height: isTablet ? 20 : 16),
                 Row(
                   children: [
-                    const Icon(Icons.notifications_active_outlined, color: Color(0xFF6B5800), size: 20),
+                    const Icon(
+                      Icons.notifications_active_outlined,
+                      color: Color(0xFF6B5800),
+                      size: 20,
+                    ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
@@ -1184,7 +1232,9 @@ class _RemindersScreenState extends ConsumerState<RemindersScreen>
                 InkWell(
                   onTap: () async {
                     final now = TimeUtils.now;
-                    final firstDate = selectedDate.isBefore(now) ? selectedDate : now;
+                    final firstDate = selectedDate.isBefore(now)
+                        ? selectedDate
+                        : now;
                     final date = await showDatePicker(
                       context: context,
                       initialDate: selectedDate,
@@ -1194,7 +1244,9 @@ class _RemindersScreenState extends ConsumerState<RemindersScreen>
                         return Theme(
                           data: Theme.of(context).copyWith(
                             colorScheme: const ColorScheme.light(
-                              primary: Color(0xFF6B5800), // header background color
+                              primary: Color(
+                                0xFF6B5800,
+                              ), // header background color
                               onPrimary: Colors.white, // header text color
                               onSurface: Colors.black, // body text color
                             ),
@@ -1252,7 +1304,9 @@ class _RemindersScreenState extends ConsumerState<RemindersScreen>
                         SizedBox(width: isTablet ? 12 : 10),
                         Expanded(
                           child: Text(
-                            DateFormat('dd MMM yyyy • hh:mm a').format(selectedDate),
+                            DateFormat(
+                              'dd MMM yyyy • hh:mm a',
+                            ).format(selectedDate),
                             style: GoogleFonts.montserrat(
                               fontSize: isTablet ? 15 : 14,
                               fontWeight: FontWeight.w500,

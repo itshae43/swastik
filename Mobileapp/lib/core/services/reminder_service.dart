@@ -7,15 +7,26 @@ import 'package:swastik_mobile_app/core/utils/constants.dart';
 class ReminderService {
   final String baseUrl = AppConstants.baseUrl;
 
+  Future<List<ReminderModel>> fetchReminders() async {
+    final res = await http.get(Uri.parse('$baseUrl/reminders'));
+    if (res.statusCode == 200) {
+      final List data = jsonDecode(res.body);
+      return data
+          .map(
+            (e) => ReminderModel.fromMap(e['_id'], e as Map<String, dynamic>),
+          )
+          .toList();
+    }
+    throw Exception('Failed to load reminders (${res.statusCode})');
+  }
+
   Stream<List<ReminderModel>> getReminders(String userId) async* {
     while (true) {
       try {
-        final res = await http.get(Uri.parse('$baseUrl/reminders'));
-        if (res.statusCode == 200) {
-          final List data = jsonDecode(res.body);
-          yield data.map((e) => ReminderModel.fromMap(e['_id'], e as Map<String, dynamic>)).toList();
-        }
-      } catch (e) {}
+        yield await fetchReminders();
+      } catch (_) {
+        // Keep the polling stream alive; the next cycle will retry.
+      }
       await Future.delayed(const Duration(seconds: 3));
     }
   }
@@ -23,49 +34,57 @@ class ReminderService {
   Stream<List<ReminderModel>> getPartyReminders(String partyId) async* {
     while (true) {
       try {
-        final res = await http.get(Uri.parse('$baseUrl/reminders'));
-        if (res.statusCode == 200) {
-          final List data = jsonDecode(res.body);
-          final all = data.map((e) => ReminderModel.fromMap(e['_id'], e as Map<String, dynamic>)).toList();
-          yield all.where((r) => r.partyId == partyId).toList();
-        }
-      } catch (e) {}
+        final all = await fetchReminders();
+        yield all.where((r) => r.partyId == partyId).toList();
+      } catch (_) {
+        // Keep the polling stream alive; the next cycle will retry.
+      }
       await Future.delayed(const Duration(seconds: 3));
     }
   }
 
-  Future<void> createReminder(ReminderModel reminder) async {
-    await http.post(
+  Future<ReminderModel> createReminder(ReminderModel reminder) async {
+    final res = await http.post(
       Uri.parse('$baseUrl/reminders'),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode(reminder.toMap()),
     );
+    if (res.statusCode == 200 || res.statusCode == 201) {
+      final data = jsonDecode(res.body) as Map<String, dynamic>;
+      return ReminderModel.fromMap(data['_id'], data);
+    }
+    throw Exception('Failed to create reminder (${res.statusCode})');
   }
 
-  Future<void> updateReminder(ReminderModel reminder) async {
-    await http.put(
+  Future<ReminderModel> updateReminder(ReminderModel reminder) async {
+    final res = await http.put(
       Uri.parse('$baseUrl/reminders/${reminder.id}'),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode(reminder.toMap()),
     );
+    if (res.statusCode == 200) {
+      final data = jsonDecode(res.body) as Map<String, dynamic>;
+      return ReminderModel.fromMap(data['_id'], data);
+    }
+    throw Exception('Failed to update reminder (${res.statusCode})');
   }
 
   Future<void> deleteReminder(String id) async {
-    await http.delete(Uri.parse('$baseUrl/reminders/$id'));
+    final res = await http.delete(Uri.parse('$baseUrl/reminders/$id'));
+    if (res.statusCode != 200) {
+      throw Exception('Failed to delete reminder (${res.statusCode})');
+    }
   }
 
   Future<void> markAsDone(String id) async {
-    // Note: since we only have full object PUT, we might need to fetch it first.
-    // However, since this is a quick fix, let's fetch it, update status, and PUT.
-    final res = await http.get(Uri.parse('$baseUrl/reminders'));
-    if (res.statusCode == 200) {
-      final List data = jsonDecode(res.body);
-      final rMap = data.firstWhere((r) => r['_id'] == id, orElse: () => null);
-      if (rMap != null) {
-        final reminder = ReminderModel.fromMap(rMap['_id'], rMap);
-        final updated = reminder.copyWith(status: ReminderStatus.completed);
-        await updateReminder(updated);
-      }
+    final reminders = await fetchReminders();
+    final reminder = reminders.cast<ReminderModel?>().firstWhere(
+      (r) => r?.id == id,
+      orElse: () => null,
+    );
+    if (reminder != null) {
+      final updated = reminder.copyWith(status: ReminderStatus.completed);
+      await updateReminder(updated);
     }
   }
 }

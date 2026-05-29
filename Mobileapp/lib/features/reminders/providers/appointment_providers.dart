@@ -6,16 +6,13 @@ import 'package:swastik_mobile_app/core/utils/time_utils.dart';
 
 final appointmentServiceProvider = Provider((ref) => AppointmentService());
 
-final Set<String> _scheduledAppointments = {};
-
-final appointmentsStreamProvider = StreamProvider<List<AppointmentModel>>((ref) {
-  return ref.watch(appointmentServiceProvider).getAppointments().map((appointments) {
-    for (var a in appointments) {
-      if (!_scheduledAppointments.contains(a.id) && a.status == AppointmentStatus.upcoming && a.date.isAfter(TimeUtils.now)) {
-        NotificationService().scheduleAppointmentNotification(a);
-        _scheduledAppointments.add(a.id);
-      }
-    }
+final appointmentsStreamProvider = StreamProvider<List<AppointmentModel>>((
+  ref,
+) {
+  return ref.watch(appointmentServiceProvider).getAppointments().asyncMap((
+    appointments,
+  ) async {
+    await NotificationService().repairAppointmentSchedules(appointments);
     return appointments;
   });
 });
@@ -47,6 +44,7 @@ class AppointmentNotifier extends Notifier<AsyncValue<void>> {
       );
 
       await ref.read(appointmentServiceProvider).createAppointment(appointment);
+      await NotificationService().repairSchedulesFromServer(force: true);
       state = const AsyncValue.data(null);
     } catch (e, st) {
       state = AsyncValue.error(e, st);
@@ -57,6 +55,7 @@ class AppointmentNotifier extends Notifier<AsyncValue<void>> {
     state = const AsyncValue.loading();
     try {
       await ref.read(appointmentServiceProvider).updateAppointment(appointment);
+      await NotificationService().repairSchedulesFromServer(force: true);
       state = const AsyncValue.data(null);
     } catch (e, st) {
       state = AsyncValue.error(e, st);
@@ -68,6 +67,7 @@ class AppointmentNotifier extends Notifier<AsyncValue<void>> {
     try {
       await ref.read(appointmentServiceProvider).markAsDone(id);
       await NotificationService().cancelAppointmentNotification(id);
+      await NotificationService().repairSchedulesFromServer(force: true);
       state = const AsyncValue.data(null);
     } catch (e, st) {
       state = AsyncValue.error(e, st);
@@ -79,6 +79,7 @@ class AppointmentNotifier extends Notifier<AsyncValue<void>> {
     try {
       await ref.read(appointmentServiceProvider).deleteAppointment(id);
       await NotificationService().cancelAppointmentNotification(id);
+      await NotificationService().repairSchedulesFromServer(force: true);
       state = const AsyncValue.data(null);
     } catch (e, st) {
       state = AsyncValue.error(e, st);
@@ -86,4 +87,7 @@ class AppointmentNotifier extends Notifier<AsyncValue<void>> {
   }
 }
 
-final appointmentNotifierProvider = NotifierProvider<AppointmentNotifier, AsyncValue<void>>(AppointmentNotifier.new);
+final appointmentNotifierProvider =
+    NotifierProvider<AppointmentNotifier, AsyncValue<void>>(
+      AppointmentNotifier.new,
+    );

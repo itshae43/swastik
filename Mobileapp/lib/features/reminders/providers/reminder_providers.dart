@@ -2,29 +2,25 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:swastik_mobile_app/core/models/reminder_model.dart';
 import 'package:swastik_mobile_app/core/services/reminder_service.dart';
 import 'package:swastik_mobile_app/core/services/notification_service.dart';
-import 'package:swastik_mobile_app/features/auth/providers/auth_providers.dart';
 import 'package:swastik_mobile_app/core/utils/constants.dart';
 import 'package:swastik_mobile_app/core/utils/time_utils.dart';
 
 final reminderServiceProvider = Provider((ref) => ReminderService());
 
-final Set<String> _scheduledReminders = {};
-
 final remindersStreamProvider = StreamProvider<List<ReminderModel>>((ref) {
-  return ref.watch(reminderServiceProvider).getReminders(AppConstants.centralDbId).map((reminders) {
-    for (var r in reminders) {
-      if (!_scheduledReminders.contains(r.id) && r.status == ReminderStatus.upcoming && r.date.isAfter(TimeUtils.now)) {
-        NotificationService().scheduleReminderNotification(r);
-        _scheduledReminders.add(r.id);
-      }
-    }
-    return reminders;
-  });
+  return ref
+      .watch(reminderServiceProvider)
+      .getReminders(AppConstants.centralDbId)
+      .asyncMap((reminders) async {
+        await NotificationService().repairReminderSchedules(reminders);
+        return reminders;
+      });
 });
 
-final partyRemindersStreamProvider = StreamProvider.family<List<ReminderModel>, String>((ref, partyId) {
-  return ref.watch(reminderServiceProvider).getPartyReminders(partyId);
-});
+final partyRemindersStreamProvider =
+    StreamProvider.family<List<ReminderModel>, String>((ref, partyId) {
+      return ref.watch(reminderServiceProvider).getPartyReminders(partyId);
+    });
 
 class ReminderNotifier extends Notifier<AsyncValue<void>> {
   @override
@@ -42,7 +38,6 @@ class ReminderNotifier extends Notifier<AsyncValue<void>> {
   }) async {
     state = const AsyncValue.loading();
     try {
-
       final reminder = ReminderModel(
         id: '',
         partyId: partyId,
@@ -56,6 +51,7 @@ class ReminderNotifier extends Notifier<AsyncValue<void>> {
       );
 
       await ref.read(reminderServiceProvider).createReminder(reminder);
+      await NotificationService().repairSchedulesFromServer(force: true);
       state = const AsyncValue.data(null);
     } catch (e, st) {
       state = AsyncValue.error(e, st);
@@ -66,6 +62,7 @@ class ReminderNotifier extends Notifier<AsyncValue<void>> {
     state = const AsyncValue.loading();
     try {
       await ref.read(reminderServiceProvider).updateReminder(reminder);
+      await NotificationService().repairSchedulesFromServer(force: true);
       state = const AsyncValue.data(null);
     } catch (e, st) {
       state = AsyncValue.error(e, st);
@@ -77,6 +74,7 @@ class ReminderNotifier extends Notifier<AsyncValue<void>> {
     try {
       await ref.read(reminderServiceProvider).markAsDone(id);
       await NotificationService().cancelReminderNotification(id);
+      await NotificationService().repairSchedulesFromServer(force: true);
       state = const AsyncValue.data(null);
     } catch (e, st) {
       state = AsyncValue.error(e, st);
@@ -88,6 +86,7 @@ class ReminderNotifier extends Notifier<AsyncValue<void>> {
     try {
       await ref.read(reminderServiceProvider).deleteReminder(id);
       await NotificationService().cancelReminderNotification(id);
+      await NotificationService().repairSchedulesFromServer(force: true);
       state = const AsyncValue.data(null);
     } catch (e, st) {
       state = AsyncValue.error(e, st);
@@ -95,4 +94,5 @@ class ReminderNotifier extends Notifier<AsyncValue<void>> {
   }
 }
 
-final reminderNotifierProvider = NotifierProvider<ReminderNotifier, AsyncValue<void>>(ReminderNotifier.new);
+final reminderNotifierProvider =
+    NotifierProvider<ReminderNotifier, AsyncValue<void>>(ReminderNotifier.new);

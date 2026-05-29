@@ -18,10 +18,10 @@ import 'package:swastik_mobile_app/features/auth/providers/user_profiles_provide
 import 'package:swastik_mobile_app/features/auth/providers/auth_providers.dart';
 import 'package:swastik_mobile_app/features/settings/presentation/screens/device_management_screen.dart';
 import 'package:swastik_mobile_app/core/services/pdf_service.dart';
-import 'package:swastik_mobile_app/core/models/reminder_model.dart';
 import 'package:swastik_mobile_app/features/reminders/providers/reminder_providers.dart';
-import 'package:swastik_mobile_app/core/models/appointment_model.dart';
 import 'package:swastik_mobile_app/features/reminders/providers/appointment_providers.dart';
+import 'package:swastik_mobile_app/features/reminders/providers/reminder_navigation_provider.dart';
+import 'package:swastik_mobile_app/features/navigation/presentation/providers/navigation_provider.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -53,7 +53,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     super.dispose();
   }
 
-  PopupMenuItem<String> _buildFilterMenuItem(String value, String label, IconData icon) {
+  PopupMenuItem<String> _buildFilterMenuItem(
+    String value,
+    String label,
+    IconData icon,
+  ) {
     final isSelected = _selectedTableFilter == value;
     return PopupMenuItem<String>(
       value: value,
@@ -62,7 +66,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           Icon(
             icon,
             size: 18,
-            color: isSelected ? const Color(0xFF735C0F) : const Color(0xFF5E543F).withOpacity(0.7),
+            color: isSelected
+                ? const Color(0xFF735C0F)
+                : const Color(0xFF5E543F).withOpacity(0.7),
           ),
           const SizedBox(width: 12),
           Text(
@@ -75,11 +81,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           ),
           if (isSelected) ...[
             const Spacer(),
-            const Icon(
-              Icons.check_rounded,
-              size: 16,
-              color: Color(0xFF735C0F),
-            ),
+            const Icon(Icons.check_rounded, size: 16, color: Color(0xFF735C0F)),
           ],
         ],
       ),
@@ -121,13 +123,26 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             t.date.day == now.day;
       } else if (_selectedTableFilter == 'This Week') {
         final startOfWeek = now.subtract(Duration(days: now.weekday - 1));
-        final startOfToday = DateTime(startOfWeek.year, startOfWeek.month, startOfWeek.day);
+        final startOfToday = DateTime(
+          startOfWeek.year,
+          startOfWeek.month,
+          startOfWeek.day,
+        );
         final txnDate = DateTime(t.date.year, t.date.month, t.date.day);
-        return txnDate.isAfter(startOfToday.subtract(const Duration(days: 1))) &&
-            txnDate.isBefore(DateTime(now.year, now.month, now.day).add(const Duration(days: 1)));
+        return txnDate.isAfter(
+              startOfToday.subtract(const Duration(days: 1)),
+            ) &&
+            txnDate.isBefore(
+              DateTime(
+                now.year,
+                now.month,
+                now.day,
+              ).add(const Duration(days: 1)),
+            );
       } else if (_selectedTableFilter == 'This Month') {
         return t.date.year == now.year && t.date.month == now.month;
-      } else if (_selectedTableFilter == 'Custom' && _customFilterResult != null) {
+      } else if (_selectedTableFilter == 'Custom' &&
+          _customFilterResult != null) {
         final r = _customFilterResult!;
         switch (r.type) {
           case 'date':
@@ -157,8 +172,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-
-
     final isTablet = AppResponsive.isTablet(context);
     final transactionsAsync = ref.watch(transactionsStreamProvider);
     final transactions = transactionsAsync.value ?? [];
@@ -170,8 +183,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     double diamondVal = 0.0;
 
     for (final t in transactions) {
-      final isCredit = t.type == TransactionType.receipt || t.type == TransactionType.metalIn;
-      final isDebit = t.type == TransactionType.payment || t.type == TransactionType.metalOut;
+      final isCredit =
+          t.type == TransactionType.receipt ||
+          t.type == TransactionType.metalIn;
+      final isDebit =
+          t.type == TransactionType.payment ||
+          t.type == TransactionType.metalOut;
       final val = t.metalType.isEmpty ? t.cashAmount : t.metalWeight;
 
       if (t.metalType.isEmpty) {
@@ -179,8 +196,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           if (isCredit) cashVal += val;
           if (isDebit) cashVal -= val;
         } else if (t.paymentMode == PaymentMode.online ||
-                   t.paymentMode == PaymentMode.upi ||
-                   t.paymentMode == PaymentMode.rtgs) {
+            t.paymentMode == PaymentMode.upi ||
+            t.paymentMode == PaymentMode.rtgs) {
           if (isCredit) onlineVal += val;
           if (isDebit) onlineVal -= val;
         }
@@ -193,12 +210,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       }
     }
 
-    final String displayCash = '₹ ${NumberFormat.decimalPattern('en_IN').format(cashVal)}';
-    final String displayOnline = '₹ ${NumberFormat.decimalPattern('en_IN').format(onlineVal)}';
-    final String displayGold = '${goldVal % 1 == 0 ? goldVal.toInt().toString() : goldVal.toStringAsFixed(3).replaceAll(RegExp(r"\.?0+$"), "")} g';
-    final String displayDiamond = '${diamondVal % 1 == 0 ? diamondVal.toInt().toString() : diamondVal.toStringAsFixed(2).replaceAll(RegExp(r"\.?0+$"), "")} ct';
-
-
+    final String displayCash =
+        '₹ ${NumberFormat.decimalPattern('en_IN').format(cashVal)}';
+    final String displayOnline =
+        '₹ ${NumberFormat.decimalPattern('en_IN').format(onlineVal)}';
+    final String displayGold =
+        '${goldVal % 1 == 0 ? goldVal.toInt().toString() : goldVal.toStringAsFixed(3).replaceAll(RegExp(r"\.?0+$"), "")} g';
+    final String displayDiamond =
+        '${diamondVal % 1 == 0 ? diamondVal.toInt().toString() : diamondVal.toStringAsFixed(2).replaceAll(RegExp(r"\.?0+$"), "")} ct';
 
     if (isTablet) {
       return _buildTabletHomeScreen(
@@ -263,116 +282,125 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         child: SafeArea(
           child: SingleChildScrollView(
             physics: const BouncingScrollPhysics(),
-            padding: const EdgeInsets.symmetric(horizontal: 28.0, vertical: 24.0),
+            padding: const EdgeInsets.symmetric(
+              horizontal: 28.0,
+              vertical: 24.0,
+            ),
             child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Header Section (Date and New Entry button)
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    dateStr,
-                    style: GoogleFonts.montserrat(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                      color: const Color(
-                        0xFF735C0F,
-                      ), // Olive-gold text matching the screenshot
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header Section (Date and New Entry button)
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      dateStr,
+                      style: GoogleFonts.montserrat(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        color: const Color(
+                          0xFF735C0F,
+                        ), // Olive-gold text matching the screenshot
+                      ),
                     ),
-                  ),
-                  Row(
-                    children: [
-                      ElevatedButton.icon(
-                        onPressed: () => _showSetAppointmentDialog(context, isTablet: true),
-                        icon: const Icon(
-                          Icons.calendar_today_outlined,
-                          color: Color(0xFF735C0F),
-                          size: 18,
-                        ),
-                        label: Text(
-                          'Set Appointment',
-                          style: GoogleFonts.montserrat(
-                            color: const Color(0xFF735C0F),
-                            fontWeight: FontWeight.bold,
-                            fontSize: 14,
+                    Row(
+                      children: [
+                        ElevatedButton.icon(
+                          onPressed: () => _showSetAppointmentDialog(
+                            context,
+                            isTablet: true,
                           ),
-                        ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFFFAF6EE),
-                          elevation: 1,
-                          side: const BorderSide(color: Color(0xFFE5DEC9), width: 1.5),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 20,
-                            vertical: 14,
+                          icon: const Icon(
+                            Icons.calendar_today_outlined,
+                            color: Color(0xFF735C0F),
+                            size: 18,
                           ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(30),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      ElevatedButton.icon(
-                        onPressed: () {
-                          showDialog(
-                            context: context,
-                            barrierDismissible: true,
-                            builder: (context) => const Dialog(
-                              backgroundColor: Colors.transparent,
-                              child: TabletQuickAddEntryDialog(),
+                          label: Text(
+                            'Set Appointment',
+                            style: GoogleFonts.montserrat(
+                              color: const Color(0xFF735C0F),
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
                             ),
-                          );
-                        },
-                        icon: const Icon(
-                          Icons.add,
-                          color: Color(0xFF01565B),
-                          size: 18,
-                        ),
-                        label: Text(
-                          'New Entry',
-                          style: GoogleFonts.montserrat(
-                            color: const Color(0xFF01565B),
-                            fontWeight: FontWeight.bold,
-                            fontSize: 14,
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFFFAF6EE),
+                            elevation: 1,
+                            side: const BorderSide(
+                              color: Color(0xFFE5DEC9),
+                              width: 1.5,
+                            ),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 20,
+                              vertical: 14,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(30),
+                            ),
                           ),
                         ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(
-                            0xFFDFBA6B,
-                          ), // Gold background
-                          elevation: 2,
-                          shadowColor: Colors.black.withOpacity(0.1),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 20,
-                            vertical: 14,
+                        const SizedBox(width: 12),
+                        ElevatedButton.icon(
+                          onPressed: () {
+                            showDialog(
+                              context: context,
+                              barrierDismissible: true,
+                              builder: (context) => const Dialog(
+                                backgroundColor: Colors.transparent,
+                                child: TabletQuickAddEntryDialog(),
+                              ),
+                            );
+                          },
+                          icon: const Icon(
+                            Icons.add,
+                            color: Color(0xFF01565B),
+                            size: 18,
                           ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(30),
+                          label: Text(
+                            'New Entry',
+                            style: GoogleFonts.montserrat(
+                              color: const Color(0xFF01565B),
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                            ),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(
+                              0xFFDFBA6B,
+                            ), // Gold background
+                            elevation: 2,
+                            shadowColor: Colors.black.withOpacity(0.1),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 20,
+                              vertical: 14,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(30),
+                            ),
                           ),
                         ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-              const SizedBox(height: 24),
+                      ],
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
 
-              // Summary Cards Grid (4 Cards Row)
-              _buildTabletSummaryCards(
-                cash: cash,
-                online: online,
-                gold: gold,
-                diamond: diamond,
-              ),
-              const SizedBox(height: 28),
+                // Summary Cards Grid (4 Cards Row)
+                _buildTabletSummaryCards(
+                  cash: cash,
+                  online: online,
+                  gold: gold,
+                  diamond: diamond,
+                ),
+                const SizedBox(height: 28),
 
-              // Recent Transactions Table inside a beautifully styled Card
-              _buildTabletTransactionsTable(transactionsAsync),
-            ],
+                // Recent Transactions Table inside a beautifully styled Card
+                _buildTabletTransactionsTable(transactionsAsync),
+              ],
+            ),
           ),
         ),
       ),
-     ),
     );
   }
 
@@ -401,7 +429,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   onTap: () => Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (context) => const TransactionStatementScreen(category: 'cash'),
+                      builder: (context) =>
+                          const TransactionStatementScreen(category: 'cash'),
                     ),
                   ),
                 ),
@@ -418,7 +447,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   onTap: () => Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (context) => const TransactionStatementScreen(category: 'online'),
+                      builder: (context) =>
+                          const TransactionStatementScreen(category: 'online'),
                     ),
                   ),
                 ),
@@ -439,7 +469,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   onTap: () => Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (context) => const TransactionStatementScreen(category: 'gold'),
+                      builder: (context) =>
+                          const TransactionStatementScreen(category: 'gold'),
                     ),
                   ),
                 ),
@@ -456,7 +487,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   onTap: () => Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (context) => const TransactionStatementScreen(category: 'diamond'),
+                      builder: (context) =>
+                          const TransactionStatementScreen(category: 'diamond'),
                     ),
                   ),
                 ),
@@ -480,7 +512,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             onTap: () => Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (context) => const TransactionStatementScreen(category: 'cash'),
+                builder: (context) =>
+                    const TransactionStatementScreen(category: 'cash'),
               ),
             ),
           ),
@@ -497,7 +530,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             onTap: () => Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (context) => const TransactionStatementScreen(category: 'online'),
+                builder: (context) =>
+                    const TransactionStatementScreen(category: 'online'),
               ),
             ),
           ),
@@ -514,7 +548,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             onTap: () => Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (context) => const TransactionStatementScreen(category: 'gold'),
+                builder: (context) =>
+                    const TransactionStatementScreen(category: 'gold'),
               ),
             ),
           ),
@@ -531,7 +566,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             onTap: () => Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (context) => const TransactionStatementScreen(category: 'diamond'),
+                builder: (context) =>
+                    const TransactionStatementScreen(category: 'diamond'),
               ),
             ),
           ),
@@ -575,7 +611,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             Container(width: 4, color: accentColor),
             Expanded(
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -660,7 +699,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
     final isPortrait =
         MediaQuery.of(context).orientation == Orientation.portrait;
-    final bool isSearchActive = isPortrait && (_searchFocusNode.hasFocus || _searchQuery.isNotEmpty);
+    final bool isSearchActive =
+        isPortrait && (_searchFocusNode.hasFocus || _searchQuery.isNotEmpty);
     final int dateFlex = 2;
     final int nameFlex = isPortrait ? 4 : 3;
     final int categoryFlex = 2;
@@ -713,7 +753,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         child: AnimatedContainer(
                           duration: const Duration(milliseconds: 300),
                           curve: Curves.easeInOutCubic,
-                          width: (!isPortrait || _searchFocusNode.hasFocus || _searchQuery.isNotEmpty) ? 240.0 : 40.0,
+                          width:
+                              (!isPortrait ||
+                                  _searchFocusNode.hasFocus ||
+                                  _searchQuery.isNotEmpty)
+                              ? 240.0
+                              : 40.0,
                           height: 40,
                           decoration: BoxDecoration(
                             color: const Color(0xFFFAF6EE),
@@ -732,7 +777,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                             style: GoogleFonts.montserrat(fontSize: 13),
                             textAlignVertical: TextAlignVertical.center,
                             decoration: InputDecoration(
-                              hintText: (!isPortrait || _searchFocusNode.hasFocus || _searchQuery.isNotEmpty) ? 'Search' : '',
+                              hintText:
+                                  (!isPortrait ||
+                                      _searchFocusNode.hasFocus ||
+                                      _searchQuery.isNotEmpty)
+                                  ? 'Search'
+                                  : '',
                               hintStyle: GoogleFonts.montserrat(
                                 color: const Color(0xFF5E543F).withOpacity(0.6),
                                 fontSize: 13,
@@ -742,9 +792,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                 size: 18,
                                 color: Color(0xFF5E543F),
                               ),
-                              suffixIcon: ((!isPortrait || _searchFocusNode.hasFocus) && _searchQuery.isNotEmpty)
+                              suffixIcon:
+                                  ((!isPortrait || _searchFocusNode.hasFocus) &&
+                                      _searchQuery.isNotEmpty)
                                   ? IconButton(
-                                      icon: const Icon(Icons.clear_rounded, size: 16, color: Color(0xFF5E543F)),
+                                      icon: const Icon(
+                                        Icons.clear_rounded,
+                                        size: 16,
+                                        color: Color(0xFF5E543F),
+                                      ),
                                       onPressed: () {
                                         _searchController.clear();
                                         setState(() {
@@ -781,11 +837,31 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           }
                         },
                         itemBuilder: (context) => [
-                          _buildFilterMenuItem('All', 'All', Icons.all_inclusive_rounded),
-                          _buildFilterMenuItem('Today', 'Today', Icons.today_rounded),
-                          _buildFilterMenuItem('This Week', 'This Week', Icons.date_range_rounded),
-                          _buildFilterMenuItem('This Month', 'This Month', Icons.calendar_month_rounded),
-                          _buildFilterMenuItem('Custom', 'Custom', Icons.tune_rounded),
+                          _buildFilterMenuItem(
+                            'All',
+                            'All',
+                            Icons.all_inclusive_rounded,
+                          ),
+                          _buildFilterMenuItem(
+                            'Today',
+                            'Today',
+                            Icons.today_rounded,
+                          ),
+                          _buildFilterMenuItem(
+                            'This Week',
+                            'This Week',
+                            Icons.date_range_rounded,
+                          ),
+                          _buildFilterMenuItem(
+                            'This Month',
+                            'This Month',
+                            Icons.calendar_month_rounded,
+                          ),
+                          _buildFilterMenuItem(
+                            'Custom',
+                            'Custom',
+                            Icons.tune_rounded,
+                          ),
                         ],
                         child: Container(
                           height: 40,
@@ -861,7 +937,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 ] else ...[
                   // Full-width search row with back button when search is active in portrait mode
                   IconButton(
-                    icon: const Icon(Icons.arrow_back_rounded, color: Color(0xFF01565B)),
+                    icon: const Icon(
+                      Icons.arrow_back_rounded,
+                      color: Color(0xFF01565B),
+                    ),
                     onPressed: () {
                       _searchController.clear();
                       setState(() {
@@ -891,7 +970,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         style: GoogleFonts.montserrat(fontSize: 13),
                         textAlignVertical: TextAlignVertical.center,
                         decoration: InputDecoration(
-                          hintText: 'Search by customer name, notes, or metal type',
+                          hintText:
+                              'Search by customer name, notes, or metal type',
                           hintStyle: GoogleFonts.montserrat(
                             color: const Color(0xFF5E543F).withOpacity(0.6),
                             fontSize: 13,
@@ -903,7 +983,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           ),
                           suffixIcon: _searchQuery.isNotEmpty
                               ? IconButton(
-                                  icon: const Icon(Icons.clear_rounded, size: 16, color: Color(0xFF5E543F)),
+                                  icon: const Icon(
+                                    Icons.clear_rounded,
+                                    size: 16,
+                                    color: Color(0xFF5E543F),
+                                  ),
                                   onPressed: () {
                                     _searchController.clear();
                                     setState(() {
@@ -1058,7 +1142,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       // Category Pill using Transaction Type / Badge specs
                       Widget categoryPill;
                       if (t.metalType.isEmpty) {
-                        if (t.paymentMode == PaymentMode.upi || t.paymentMode == PaymentMode.online) {
+                        if (t.paymentMode == PaymentMode.upi ||
+                            t.paymentMode == PaymentMode.online) {
                           categoryPill = _buildCategoryPill(
                             'UPI',
                             const Color(0xFFE0F7FA),
@@ -1233,7 +1318,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                         ),
                                       ),
                                       child: Text(
-                                        t.metalPurity.endsWith('%') || t.metalPurity.contains('Purity')
+                                        t.metalPurity.endsWith('%') ||
+                                                t.metalPurity.contains('Purity')
                                             ? t.metalPurity
                                             : '${t.metalPurity}% Purity',
                                         style: GoogleFonts.montserrat(
@@ -1256,13 +1342,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                         } else if (!displayPieces.contains(
                                               'Pcs',
                                             ) &&
-                                            !displayPieces.contains(
-                                              'pcs',
-                                            ) &&
+                                            !displayPieces.contains('pcs') &&
                                             !displayPieces.contains('p')) {
                                           displayPieces = '$displayPieces Pcs';
-                                        } else if (displayPieces.contains('pcs')) {
-                                          displayPieces = displayPieces.replaceAll('pcs', 'Pcs');
+                                        } else if (displayPieces.contains(
+                                          'pcs',
+                                        )) {
+                                          displayPieces = displayPieces
+                                              .replaceAll('pcs', 'Pcs');
                                         }
                                         return Container(
                                           padding: const EdgeInsets.symmetric(
@@ -1271,7 +1358,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                           ),
                                           decoration: BoxDecoration(
                                             color: const Color(0xFFFAF6EE),
-                                            borderRadius: BorderRadius.circular(6),
+                                            borderRadius: BorderRadius.circular(
+                                              6,
+                                            ),
                                             border: Border.all(
                                               color: const Color(0xFFE5DEC9),
                                               width: 0.8,
@@ -1300,7 +1389,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                 children: [
                                   Expanded(
                                     child: Text(
-                                      t.notes != null && t.notes!.trim().isNotEmpty
+                                      t.notes != null &&
+                                              t.notes!.trim().isNotEmpty
                                           ? t.notes!
                                           : '-',
                                       style: GoogleFonts.montserrat(
@@ -1319,13 +1409,21 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                   ),
                                   const SizedBox(width: 8),
                                   GestureDetector(
-                                    onTap: () => _showPrintReceiptDialog(context, t, amountStr, t.typeLabel),
+                                    onTap: () => _showPrintReceiptDialog(
+                                      context,
+                                      t,
+                                      amountStr,
+                                      t.typeLabel,
+                                    ),
                                     child: Container(
                                       padding: const EdgeInsets.all(6),
                                       decoration: BoxDecoration(
                                         color: const Color(0xFFFAF6EE),
                                         borderRadius: BorderRadius.circular(8),
-                                        border: Border.all(color: const Color(0xFFE5DEC9), width: 1.0),
+                                        border: Border.all(
+                                          color: const Color(0xFFE5DEC9),
+                                          width: 1.0,
+                                        ),
                                       ),
                                       child: const Icon(
                                         Icons.print_rounded,
@@ -1342,8 +1440,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                         padding: const EdgeInsets.all(6),
                                         decoration: BoxDecoration(
                                           color: const Color(0xFFFAF6EE),
-                                          borderRadius: BorderRadius.circular(8),
-                                          border: Border.all(color: const Color(0xFFE5DEC9), width: 1.0),
+                                          borderRadius: BorderRadius.circular(
+                                            8,
+                                          ),
+                                          border: Border.all(
+                                            color: const Color(0xFFE5DEC9),
+                                            width: 1.0,
+                                          ),
                                         ),
                                         child: const Icon(
                                           Icons.notifications_active_outlined,
@@ -1356,13 +1459,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                   if (!ref.watch(isStaffProvider)) ...[
                                     const SizedBox(width: 6),
                                     GestureDetector(
-                                      onTap: () => _showEditTransactionDialog(t),
+                                      onTap: () =>
+                                          _showEditTransactionDialog(t),
                                       child: Container(
                                         padding: const EdgeInsets.all(5),
                                         decoration: BoxDecoration(
                                           color: const Color(0xFFFAF6EE),
-                                          borderRadius: BorderRadius.circular(6),
-                                          border: Border.all(color: const Color(0xFFE5DEC9), width: 0.5),
+                                          borderRadius: BorderRadius.circular(
+                                            6,
+                                          ),
+                                          border: Border.all(
+                                            color: const Color(0xFFE5DEC9),
+                                            width: 0.5,
+                                          ),
                                         ),
                                         child: const Icon(
                                           Icons.edit_rounded,
@@ -1483,34 +1592,52 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           IconButton(
             onPressed: () {
               Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => const DeviceManagementScreen(initialTabIndex: 1),
+                context,
+                MaterialPageRoute(
+                  builder: (context) =>
+                      const DeviceManagementScreen(initialTabIndex: 1),
+                ),
+              );
+            },
+            icon: Badge(
+              isLabelVisible: ref
+                  .watch(userProfilesNotifierProvider)
+                  .profiles
+                  .where((p) {
+                    final isPending =
+                        p.status == 'pending_approval' ||
+                        p.requestPending == true;
+                    if (!isPending) return false;
+                    final diff = DateTime.now().difference(
+                      p.requestedAt ?? p.createdAt ?? DateTime.now(),
+                    );
+                    return diff.inMinutes < 5;
+                  })
+                  .isNotEmpty,
+              label: Text(
+                ref
+                    .watch(userProfilesNotifierProvider)
+                    .profiles
+                    .where((p) {
+                      final isPending =
+                          p.status == 'pending_approval' ||
+                          p.requestPending == true;
+                      if (!isPending) return false;
+                      final diff = DateTime.now().difference(
+                        p.requestedAt ?? p.createdAt ?? DateTime.now(),
+                      );
+                      return diff.inMinutes < 5;
+                    })
+                    .length
+                    .toString(),
               ),
-            );
-          },
-          icon: Badge(
-            isLabelVisible: ref.watch(userProfilesNotifierProvider).profiles.where((p) {
-              final isPending = p.status == 'pending_approval' || p.requestPending == true;
-              if (!isPending) return false;
-              final diff = DateTime.now().difference(p.requestedAt ?? p.createdAt ?? DateTime.now());
-              return diff.inMinutes < 5;
-            }).isNotEmpty,
-            label: Text(
-              ref.watch(userProfilesNotifierProvider).profiles.where((p) {
-                final isPending = p.status == 'pending_approval' || p.requestPending == true;
-                if (!isPending) return false;
-                final diff = DateTime.now().difference(p.requestedAt ?? p.createdAt ?? DateTime.now());
-                return diff.inMinutes < 5;
-              }).length.toString(),
-            ),
-            child: const Icon(
-              Icons.notifications_none_outlined,
-              color: Color(0xFF4A3E1F),
-              size: 28,
+              child: const Icon(
+                Icons.notifications_none_outlined,
+                color: Color(0xFF4A3E1F),
+                size: 28,
+              ),
             ),
           ),
-        ),
       ],
     );
   }
@@ -1539,7 +1666,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           onTap: () => Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (context) => const TransactionStatementScreen(category: 'cash'),
+              builder: (context) =>
+                  const TransactionStatementScreen(category: 'cash'),
             ),
           ),
         ),
@@ -1553,7 +1681,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           onTap: () => Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (context) => const TransactionStatementScreen(category: 'online'),
+              builder: (context) =>
+                  const TransactionStatementScreen(category: 'online'),
             ),
           ),
         ),
@@ -1567,7 +1696,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           onTap: () => Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (context) => const TransactionStatementScreen(category: 'gold'),
+              builder: (context) =>
+                  const TransactionStatementScreen(category: 'gold'),
             ),
           ),
         ),
@@ -1581,7 +1711,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           onTap: () => Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (context) => const TransactionStatementScreen(category: 'diamond'),
+              builder: (context) =>
+                  const TransactionStatementScreen(category: 'diamond'),
             ),
           ),
         ),
@@ -1619,13 +1750,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         clipBehavior: Clip.antiAlias,
         child: Row(
           children: [
-            Container(
-              width: 4,
-              color: accentColor,
-            ),
+            Container(width: 4, color: accentColor),
             Expanded(
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -1701,7 +1832,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
   }
 
-
   Widget _buildRecentTransactions() {
     final transactionsAsync = ref.watch(transactionsStreamProvider);
     final transactions = transactionsAsync.value ?? [];
@@ -1761,7 +1891,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     ),
                     suffixIcon: _searchQuery.isNotEmpty
                         ? IconButton(
-                            icon: const Icon(Icons.clear_rounded, size: 16, color: Color(0xFF5E543F)),
+                            icon: const Icon(
+                              Icons.clear_rounded,
+                              size: 16,
+                              color: Color(0xFF5E543F),
+                            ),
                             onPressed: () {
                               _searchController.clear();
                               setState(() {
@@ -1794,8 +1928,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               itemBuilder: (context) => [
                 _buildFilterMenuItem('All', 'All', Icons.all_inclusive_rounded),
                 _buildFilterMenuItem('Today', 'Today', Icons.today_rounded),
-                _buildFilterMenuItem('This Week', 'This Week', Icons.date_range_rounded),
-                _buildFilterMenuItem('This Month', 'This Month', Icons.calendar_month_rounded),
+                _buildFilterMenuItem(
+                  'This Week',
+                  'This Week',
+                  Icons.date_range_rounded,
+                ),
+                _buildFilterMenuItem(
+                  'This Month',
+                  'This Month',
+                  Icons.calendar_month_rounded,
+                ),
                 _buildFilterMenuItem('Custom', 'Custom', Icons.tune_rounded),
               ],
               child: Container(
@@ -1894,7 +2036,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   middleRightLabel =
                       '₹ ${NumberFormat.decimalPattern('en_IN').format(activity.cashAmount)}';
                 } else if (activity.metalType == 'gold') {
-                  topRightLabel = 'Gold (${activity.metalPurity.endsWith('%') ? activity.metalPurity : '${activity.metalPurity}%'})';
+                  topRightLabel =
+                      'Gold (${activity.metalPurity.endsWith('%') ? activity.metalPurity : '${activity.metalPurity}%'})';
                   middleRightLabel = '${activity.metalWeight}g';
                 } else if (activity.metalType == 'diamond') {
                   topRightLabel = 'Diamond (${activity.metalWeight}ct)';
@@ -2039,13 +2182,22 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                         ),
                                         const SizedBox(width: 8),
                                         GestureDetector(
-                                          onTap: () => _showPrintReceiptDialog(context, activity, middleRightLabel, activity.typeLabel),
+                                          onTap: () => _showPrintReceiptDialog(
+                                            context,
+                                            activity,
+                                            middleRightLabel,
+                                            activity.typeLabel,
+                                          ),
                                           child: Container(
                                             padding: const EdgeInsets.all(5),
                                             decoration: BoxDecoration(
                                               color: const Color(0xFFFAF6EE),
-                                              borderRadius: BorderRadius.circular(6),
-                                              border: Border.all(color: const Color(0xFFE5DEC9), width: 0.5),
+                                              borderRadius:
+                                                  BorderRadius.circular(6),
+                                              border: Border.all(
+                                                color: const Color(0xFFE5DEC9),
+                                                width: 0.5,
+                                              ),
                                             ),
                                             child: const Icon(
                                               Icons.print_rounded,
@@ -2057,16 +2209,25 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                         if (ref.watch(isStaffProvider)) ...[
                                           const SizedBox(width: 6),
                                           GestureDetector(
-                                            onTap: () => _showSetReminderDialog(activity),
+                                            onTap: () => _showSetReminderDialog(
+                                              activity,
+                                            ),
                                             child: Container(
                                               padding: const EdgeInsets.all(5),
                                               decoration: BoxDecoration(
                                                 color: const Color(0xFFFAF6EE),
-                                                borderRadius: BorderRadius.circular(6),
-                                                border: Border.all(color: const Color(0xFFE5DEC9), width: 0.5),
+                                                borderRadius:
+                                                    BorderRadius.circular(6),
+                                                border: Border.all(
+                                                  color: const Color(
+                                                    0xFFE5DEC9,
+                                                  ),
+                                                  width: 0.5,
+                                                ),
                                               ),
                                               child: const Icon(
-                                                Icons.notifications_active_outlined,
+                                                Icons
+                                                    .notifications_active_outlined,
                                                 size: 13,
                                                 color: Color(0xFF735C0F),
                                               ),
@@ -2076,13 +2237,22 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                         if (!ref.watch(isStaffProvider)) ...[
                                           const SizedBox(width: 6),
                                           GestureDetector(
-                                            onTap: () => _showEditTransactionDialog(activity),
+                                            onTap: () =>
+                                                _showEditTransactionDialog(
+                                                  activity,
+                                                ),
                                             child: Container(
                                               padding: const EdgeInsets.all(5),
                                               decoration: BoxDecoration(
                                                 color: const Color(0xFFFAF6EE),
-                                                borderRadius: BorderRadius.circular(6),
-                                                border: Border.all(color: const Color(0xFFE5DEC9), width: 0.5),
+                                                borderRadius:
+                                                    BorderRadius.circular(6),
+                                                border: Border.all(
+                                                  color: const Color(
+                                                    0xFFE5DEC9,
+                                                  ),
+                                                  width: 0.5,
+                                                ),
                                               ),
                                               child: const Icon(
                                                 Icons.edit_rounded,
@@ -2135,7 +2305,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 decoration: BoxDecoration(
                   color: const Color(0xFFFAF6EE),
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: const Color(0xFFDFBA6B), width: 1.5),
+                  border: Border.all(
+                    color: const Color(0xFFDFBA6B),
+                    width: 1.5,
+                  ),
                   boxShadow: [
                     BoxShadow(
                       color: Colors.black.withOpacity(0.15),
@@ -2149,7 +2322,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   children: [
                     // Header
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 16,
+                      ),
                       decoration: const BoxDecoration(
                         color: Color(0xFF01565B),
                         borderRadius: BorderRadius.only(
@@ -2169,7 +2345,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                             ),
                           ),
                           IconButton(
-                            icon: const Icon(Icons.close, color: Colors.white, size: 20),
+                            icon: const Icon(
+                              Icons.close,
+                              color: Colors.white,
+                              size: 20,
+                            ),
                             onPressed: () => Navigator.pop(context),
                             padding: EdgeInsets.zero,
                             constraints: const BoxConstraints(),
@@ -2185,7 +2365,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            const CircularProgressIndicator(color: Color(0xFF01565B)),
+                            const CircularProgressIndicator(
+                              color: Color(0xFF01565B),
+                            ),
                             const SizedBox(height: 20),
                             Text(
                               'Preparing statement sheet...',
@@ -2266,7 +2448,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                             decoration: BoxDecoration(
                               color: Colors.white,
                               borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: Colors.grey.withOpacity(0.2)),
+                              border: Border.all(
+                                color: Colors.grey.withOpacity(0.2),
+                              ),
                             ),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -2298,13 +2482,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                         ),
                                       ),
                                       const SizedBox(height: 6),
-                                      Divider(height: 1, color: Colors.grey[300]),
+                                      Divider(
+                                        height: 1,
+                                        color: Colors.grey[300],
+                                      ),
                                     ],
                                   ),
                                 ),
                                 const SizedBox(height: 10),
                                 Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
                                   children: [
                                     Text(
                                       'Total Entries:',
@@ -2326,7 +2514,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                 ),
                                 const SizedBox(height: 10),
                                 Table(
-                                  border: TableBorder.all(color: Colors.grey.withOpacity(0.3), width: 0.5),
+                                  border: TableBorder.all(
+                                    color: Colors.grey.withOpacity(0.3),
+                                    width: 0.5,
+                                  ),
                                   columnWidths: const {
                                     0: FlexColumnWidth(2),
                                     1: FlexColumnWidth(3),
@@ -2334,24 +2525,46 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                   },
                                   children: [
                                     TableRow(
-                                      decoration: const BoxDecoration(color: Color(0xFFFAF6EE)),
+                                      decoration: const BoxDecoration(
+                                        color: Color(0xFFFAF6EE),
+                                      ),
                                       children: [
                                         Padding(
                                           padding: const EdgeInsets.all(4.0),
-                                          child: Text('Date', style: GoogleFonts.montserrat(fontSize: 8, fontWeight: FontWeight.bold)),
+                                          child: Text(
+                                            'Date',
+                                            style: GoogleFonts.montserrat(
+                                              fontSize: 8,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
                                         ),
                                         Padding(
                                           padding: const EdgeInsets.all(4.0),
-                                          child: Text('Party / Mode', style: GoogleFonts.montserrat(fontSize: 8, fontWeight: FontWeight.bold)),
+                                          child: Text(
+                                            'Party / Mode',
+                                            style: GoogleFonts.montserrat(
+                                              fontSize: 8,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
                                         ),
                                         Padding(
                                           padding: const EdgeInsets.all(4.0),
-                                          child: Text('Value', style: GoogleFonts.montserrat(fontSize: 8, fontWeight: FontWeight.bold)),
+                                          child: Text(
+                                            'Value',
+                                            style: GoogleFonts.montserrat(
+                                              fontSize: 8,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
                                         ),
                                       ],
                                     ),
                                     ...txns.take(8).map((txn) {
-                                      final isCr = txn.type == TransactionType.receipt || txn.type == TransactionType.metalIn;
+                                      final isCr =
+                                          txn.type == TransactionType.receipt ||
+                                          txn.type == TransactionType.metalIn;
                                       String categoryUnit = '';
                                       if (txn.metalType == 'gold') {
                                         categoryUnit = 'g';
@@ -2359,20 +2572,29 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                         categoryUnit = 'ct';
                                       }
 
-                                      final amt = txn.metalType.isEmpty 
+                                      final amt = txn.metalType.isEmpty
                                           ? '₹${NumberFormat.decimalPattern('en_IN').format(txn.cashAmount)}'
                                           : '${txn.metalWeight} $categoryUnit';
                                       return TableRow(
                                         children: [
                                           Padding(
                                             padding: const EdgeInsets.all(4.0),
-                                            child: Text(DateFormat('dd MMM').format(txn.date), style: GoogleFonts.montserrat(fontSize: 8)),
+                                            child: Text(
+                                              DateFormat(
+                                                'dd MMM',
+                                              ).format(txn.date),
+                                              style: GoogleFonts.montserrat(
+                                                fontSize: 8,
+                                              ),
+                                            ),
                                           ),
                                           Padding(
                                             padding: const EdgeInsets.all(4.0),
                                             child: Text(
                                               txn.partyName,
-                                              style: GoogleFonts.montserrat(fontSize: 8),
+                                              style: GoogleFonts.montserrat(
+                                                fontSize: 8,
+                                              ),
                                               overflow: TextOverflow.ellipsis,
                                             ),
                                           ),
@@ -2383,7 +2605,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                               style: GoogleFonts.montserrat(
                                                 fontSize: 8,
                                                 fontWeight: FontWeight.bold,
-                                                color: isCr ? const Color(0xFF01565B) : const Color(0xFFC62828),
+                                                color: isCr
+                                                    ? const Color(0xFF01565B)
+                                                    : const Color(0xFFC62828),
                                               ),
                                             ),
                                           ),
@@ -2397,7 +2621,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                   Center(
                                     child: Text(
                                       '... and ${txns.length - 8} more entries ...',
-                                      style: GoogleFonts.montserrat(fontSize: 8, color: Colors.grey),
+                                      style: GoogleFonts.montserrat(
+                                        fontSize: 8,
+                                        color: Colors.grey,
+                                      ),
                                     ),
                                   ),
                                 ],
@@ -2409,7 +2636,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
                       // Print Dialog Actions
                       Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 12,
+                        ),
                         child: Row(
                           children: [
                             Expanded(
@@ -2419,23 +2649,30 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                     isPrinting = true;
                                   });
                                   try {
-                                    final pdfBytes = await PdfService.generateStatementPdf(
-                                      transactions: txns,
-                                      title: title,
-                                      subtitle: subtitle,
-                                    );
+                                    final pdfBytes =
+                                        await PdfService.generateStatementPdf(
+                                          transactions: txns,
+                                          title: title,
+                                          subtitle: subtitle,
+                                        );
                                     await PdfService.printPdf(pdfBytes);
                                     Navigator.pop(context);
                                   } catch (e) {
                                     ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(content: Text('Error printing: $e')),
+                                      SnackBar(
+                                        content: Text('Error printing: $e'),
+                                      ),
                                     );
                                     setDialogState(() {
                                       isPrinting = false;
                                     });
                                   }
                                 },
-                                icon: const Icon(Icons.print_rounded, size: 18, color: Color(0xFF01565B)),
+                                icon: const Icon(
+                                  Icons.print_rounded,
+                                  size: 18,
+                                  color: Color(0xFF01565B),
+                                ),
                                 label: Text(
                                   'Print Statement',
                                   style: GoogleFonts.montserrat(
@@ -2445,8 +2682,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                   ),
                                 ),
                                 style: OutlinedButton.styleFrom(
-                                  side: const BorderSide(color: Color(0xFF01565B), width: 1.5),
-                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                  side: const BorderSide(
+                                    color: Color(0xFF01565B),
+                                    width: 1.5,
+                                  ),
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 12,
+                                  ),
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(10),
                                   ),
@@ -2461,29 +2703,37 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                     isPrinting = true;
                                   });
                                   try {
-                                    final pdfBytes = await PdfService.generateStatementPdf(
-                                      transactions: txns,
-                                      title: title,
-                                      subtitle: subtitle,
-                                    );
-                                    final success = await PdfService.savePdfToDownloads(
-                                      pdfBytes,
-                                      'Statement_${DateTime.now().millisecondsSinceEpoch}',
-                                    );
+                                    final pdfBytes =
+                                        await PdfService.generateStatementPdf(
+                                          transactions: txns,
+                                          title: title,
+                                          subtitle: subtitle,
+                                        );
+                                    final success =
+                                        await PdfService.savePdfToDownloads(
+                                          pdfBytes,
+                                          'Statement_${DateTime.now().millisecondsSinceEpoch}',
+                                        );
                                     setDialogState(() {
                                       isPrinting = false;
                                       isSaved = success;
                                     });
                                   } catch (e) {
                                     ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(content: Text('Error saving PDF: $e')),
+                                      SnackBar(
+                                        content: Text('Error saving PDF: $e'),
+                                      ),
                                     );
                                     setDialogState(() {
                                       isPrinting = false;
                                     });
                                   }
                                 },
-                                icon: const Icon(Icons.picture_as_pdf, size: 18, color: Colors.white),
+                                icon: const Icon(
+                                  Icons.picture_as_pdf,
+                                  size: 18,
+                                  color: Colors.white,
+                                ),
                                 label: Text(
                                   'Save PDF',
                                   style: GoogleFonts.montserrat(
@@ -2494,7 +2744,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                 ),
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: const Color(0xFF01565B),
-                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 12,
+                                  ),
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(10),
                                   ),
@@ -2543,7 +2795,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 children: [
                   Text(
                     'Are you sure you want to delete this transaction? This will reverse its impact on the customer\'s outstanding balance.',
-                    style: GoogleFonts.montserrat(fontSize: 14, color: Colors.black87),
+                    style: GoogleFonts.montserrat(
+                      fontSize: 14,
+                      color: Colors.black87,
+                    ),
                   ),
                   const SizedBox(height: 16),
                   Container(
@@ -2558,16 +2813,21 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       children: [
                         Text(
                           txn.typeLabel,
-                          style: GoogleFonts.montserrat(fontWeight: FontWeight.bold, fontSize: 13),
+                          style: GoogleFonts.montserrat(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                          ),
                         ),
                         Text(
-                          txn.metalType.isEmpty 
-                              ? '₹${txn.cashAmount.toStringAsFixed(2)}' 
+                          txn.metalType.isEmpty
+                              ? '₹${txn.cashAmount.toStringAsFixed(2)}'
                               : '${txn.metalWeight} ${txn.metalType == 'gold' ? 'g' : 'ct'}',
                           style: GoogleFonts.montserrat(
                             fontWeight: FontWeight.bold,
                             fontSize: 13,
-                            color: txn.type == TransactionType.receipt || txn.type == TransactionType.metalIn
+                            color:
+                                txn.type == TransactionType.receipt ||
+                                    txn.type == TransactionType.metalIn
                                 ? const Color(0xFF2852C6)
                                 : const Color(0xFFC62828),
                           ),
@@ -2582,7 +2842,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   onPressed: isDeleting ? null : () => Navigator.pop(context),
                   child: Text(
                     'Cancel',
-                    style: GoogleFonts.montserrat(fontWeight: FontWeight.bold, color: Colors.grey[700]),
+                    style: GoogleFonts.montserrat(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.grey[700],
+                    ),
                   ),
                 ),
                 ElevatedButton(
@@ -2598,27 +2861,43 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
                                 content: Text(
-                                  success ? 'Transaction deleted successfully' : 'Failed to delete transaction',
-                                  style: GoogleFonts.montserrat(fontWeight: FontWeight.w600),
+                                  success
+                                      ? 'Transaction deleted successfully'
+                                      : 'Failed to delete transaction',
+                                  style: GoogleFonts.montserrat(
+                                    fontWeight: FontWeight.w600,
+                                  ),
                                 ),
-                                backgroundColor: success ? const Color(0xFF2E7D32) : const Color(0xFFC62828),
+                                backgroundColor: success
+                                    ? const Color(0xFF2E7D32)
+                                    : const Color(0xFFC62828),
                               ),
                             );
                           }
                         },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFFC62828),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
                   ),
                   child: isDeleting
                       ? const SizedBox(
                           width: 18,
                           height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation<Color>(Colors.white)),
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              Colors.white,
+                            ),
+                          ),
                         )
                       : Text(
                           'Delete',
-                          style: GoogleFonts.montserrat(fontWeight: FontWeight.bold, color: Colors.white),
+                          style: GoogleFonts.montserrat(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
                         ),
                 ),
               ],
@@ -2631,15 +2910,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   void _showEditTransactionDialog(TransactionModel txn) {
     final amountController = TextEditingController(
-      text: txn.metalType.isEmpty ? txn.cashAmount.toString() : txn.metalWeight.toString(),
+      text: txn.metalType.isEmpty
+          ? txn.cashAmount.toString()
+          : txn.metalWeight.toString(),
     );
     final notesController = TextEditingController(text: txn.notes);
-    
+
     // Gold Purity field
     final purityController = TextEditingController(
       text: txn.metalType == 'gold' ? txn.metalPurity : '',
     );
-    
+
     // Diamond Pieces field
     String initialPieces = txn.metalPurity;
     if (initialPieces.endsWith(' p')) {
@@ -2650,13 +2931,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
 
     DateTime selectedDate = txn.date;
-    PaymentMode selectedPaymentMode = txn.paymentMode == PaymentMode.online ? PaymentMode.upi : txn.paymentMode;
+    PaymentMode selectedPaymentMode = txn.paymentMode == PaymentMode.online
+        ? PaymentMode.upi
+        : txn.paymentMode;
 
     showDialog(
       context: context,
       builder: (context) {
         bool isSaving = false;
-        bool isIn = txn.type == TransactionType.receipt || txn.type == TransactionType.metalIn;
+        bool isIn =
+            txn.type == TransactionType.receipt ||
+            txn.type == TransactionType.metalIn;
 
         return StatefulBuilder(
           builder: (context, setDialogState) {
@@ -2688,18 +2973,28 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       decoration: InputDecoration(
                         filled: true,
                         fillColor: Colors.white,
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 12,
+                        ),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(10),
-                          borderSide: const BorderSide(color: Color(0xFFDFBA6B)),
+                          borderSide: const BorderSide(
+                            color: Color(0xFFDFBA6B),
+                          ),
                         ),
                         enabledBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(10),
-                          borderSide: BorderSide(color: const Color(0xFFDFBA6B).withOpacity(0.5)),
+                          borderSide: BorderSide(
+                            color: const Color(0xFFDFBA6B).withOpacity(0.5),
+                          ),
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(10),
-                          borderSide: const BorderSide(color: Color(0xFF6B5800), width: 1.5),
+                          borderSide: const BorderSide(
+                            color: Color(0xFF6B5800),
+                            width: 1.5,
+                          ),
                         ),
                       ),
                       style: GoogleFonts.montserrat(
@@ -2719,9 +3014,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           value: true,
                           child: Row(
                             children: [
-                              Icon(Icons.arrow_downward_rounded, color: Color(0xFF2E7D32), size: 18),
+                              Icon(
+                                Icons.arrow_downward_rounded,
+                                color: Color(0xFF2E7D32),
+                                size: 18,
+                              ),
                               SizedBox(width: 8),
-                              Text('In', style: TextStyle(color: Color(0xFF2E7D32), fontWeight: FontWeight.bold)),
+                              Text(
+                                'In',
+                                style: TextStyle(
+                                  color: Color(0xFF2E7D32),
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
                             ],
                           ),
                         ),
@@ -2729,9 +3034,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           value: false,
                           child: Row(
                             children: [
-                              Icon(Icons.arrow_upward_rounded, color: Color(0xFFC62828), size: 18),
+                              Icon(
+                                Icons.arrow_upward_rounded,
+                                color: Color(0xFFC62828),
+                                size: 18,
+                              ),
                               SizedBox(width: 8),
-                              Text('Out', style: TextStyle(color: Color(0xFFC62828), fontWeight: FontWeight.bold)),
+                              Text(
+                                'Out',
+                                style: TextStyle(
+                                  color: Color(0xFFC62828),
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
                             ],
                           ),
                         ),
@@ -2756,18 +3071,28 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         decoration: InputDecoration(
                           filled: true,
                           fillColor: Colors.white,
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 12,
+                          ),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(10),
-                            borderSide: const BorderSide(color: Color(0xFFDFBA6B)),
+                            borderSide: const BorderSide(
+                              color: Color(0xFFDFBA6B),
+                            ),
                           ),
                           enabledBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(10),
-                            borderSide: BorderSide(color: const Color(0xFFDFBA6B).withOpacity(0.5)),
+                            borderSide: BorderSide(
+                              color: const Color(0xFFDFBA6B).withOpacity(0.5),
+                            ),
                           ),
                           focusedBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(10),
-                            borderSide: const BorderSide(color: Color(0xFF6B5800), width: 1.5),
+                            borderSide: const BorderSide(
+                              color: Color(0xFF6B5800),
+                              width: 1.5,
+                            ),
                           ),
                         ),
                         style: GoogleFonts.montserrat(
@@ -2810,23 +3135,37 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       const SizedBox(height: 8),
                       TextField(
                         controller: amountController,
-                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                        style: GoogleFonts.montserrat(fontWeight: FontWeight.w600),
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
+                        style: GoogleFonts.montserrat(
+                          fontWeight: FontWeight.w600,
+                        ),
                         decoration: InputDecoration(
                           filled: true,
                           fillColor: Colors.white,
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 12,
+                          ),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(10),
-                            borderSide: const BorderSide(color: Color(0xFFDFBA6B)),
+                            borderSide: const BorderSide(
+                              color: Color(0xFFDFBA6B),
+                            ),
                           ),
                           enabledBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(10),
-                            borderSide: BorderSide(color: const Color(0xFFDFBA6B).withOpacity(0.5)),
+                            borderSide: BorderSide(
+                              color: const Color(0xFFDFBA6B).withOpacity(0.5),
+                            ),
                           ),
                           focusedBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(10),
-                            borderSide: const BorderSide(color: Color(0xFF6B5800), width: 1.5),
+                            borderSide: const BorderSide(
+                              color: Color(0xFF6B5800),
+                              width: 1.5,
+                            ),
                           ),
                         ),
                       ),
@@ -2844,23 +3183,37 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       const SizedBox(height: 8),
                       TextField(
                         controller: amountController,
-                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                        style: GoogleFonts.montserrat(fontWeight: FontWeight.w600),
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
+                        style: GoogleFonts.montserrat(
+                          fontWeight: FontWeight.w600,
+                        ),
                         decoration: InputDecoration(
                           filled: true,
                           fillColor: Colors.white,
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 12,
+                          ),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(10),
-                            borderSide: const BorderSide(color: Color(0xFFDFBA6B)),
+                            borderSide: const BorderSide(
+                              color: Color(0xFFDFBA6B),
+                            ),
                           ),
                           enabledBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(10),
-                            borderSide: BorderSide(color: const Color(0xFFDFBA6B).withOpacity(0.5)),
+                            borderSide: BorderSide(
+                              color: const Color(0xFFDFBA6B).withOpacity(0.5),
+                            ),
                           ),
                           focusedBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(10),
-                            borderSide: const BorderSide(color: Color(0xFF6B5800), width: 1.5),
+                            borderSide: const BorderSide(
+                              color: Color(0xFF6B5800),
+                              width: 1.5,
+                            ),
                           ),
                         ),
                       ),
@@ -2877,22 +3230,34 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       const SizedBox(height: 8),
                       TextField(
                         controller: purityController,
-                        style: GoogleFonts.montserrat(fontWeight: FontWeight.w600),
+                        style: GoogleFonts.montserrat(
+                          fontWeight: FontWeight.w600,
+                        ),
                         decoration: InputDecoration(
                           filled: true,
                           fillColor: Colors.white,
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 12,
+                          ),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(10),
-                            borderSide: const BorderSide(color: Color(0xFFDFBA6B)),
+                            borderSide: const BorderSide(
+                              color: Color(0xFFDFBA6B),
+                            ),
                           ),
                           enabledBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(10),
-                            borderSide: BorderSide(color: const Color(0xFFDFBA6B).withOpacity(0.5)),
+                            borderSide: BorderSide(
+                              color: const Color(0xFFDFBA6B).withOpacity(0.5),
+                            ),
                           ),
                           focusedBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(10),
-                            borderSide: const BorderSide(color: Color(0xFF6B5800), width: 1.5),
+                            borderSide: const BorderSide(
+                              color: Color(0xFF6B5800),
+                              width: 1.5,
+                            ),
                           ),
                         ),
                       ),
@@ -2910,23 +3275,37 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       const SizedBox(height: 8),
                       TextField(
                         controller: amountController,
-                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                        style: GoogleFonts.montserrat(fontWeight: FontWeight.w600),
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
+                        style: GoogleFonts.montserrat(
+                          fontWeight: FontWeight.w600,
+                        ),
                         decoration: InputDecoration(
                           filled: true,
                           fillColor: Colors.white,
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 12,
+                          ),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(10),
-                            borderSide: const BorderSide(color: Color(0xFFDFBA6B)),
+                            borderSide: const BorderSide(
+                              color: Color(0xFFDFBA6B),
+                            ),
                           ),
                           enabledBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(10),
-                            borderSide: BorderSide(color: const Color(0xFFDFBA6B).withOpacity(0.5)),
+                            borderSide: BorderSide(
+                              color: const Color(0xFFDFBA6B).withOpacity(0.5),
+                            ),
                           ),
                           focusedBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(10),
-                            borderSide: const BorderSide(color: Color(0xFF6B5800), width: 1.5),
+                            borderSide: const BorderSide(
+                              color: Color(0xFF6B5800),
+                              width: 1.5,
+                            ),
                           ),
                         ),
                       ),
@@ -2944,22 +3323,34 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       TextField(
                         controller: piecesController,
                         keyboardType: TextInputType.number,
-                        style: GoogleFonts.montserrat(fontWeight: FontWeight.w600),
+                        style: GoogleFonts.montserrat(
+                          fontWeight: FontWeight.w600,
+                        ),
                         decoration: InputDecoration(
                           filled: true,
                           fillColor: Colors.white,
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 12,
+                          ),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(10),
-                            borderSide: const BorderSide(color: Color(0xFFDFBA6B)),
+                            borderSide: const BorderSide(
+                              color: Color(0xFFDFBA6B),
+                            ),
                           ),
                           enabledBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(10),
-                            borderSide: BorderSide(color: const Color(0xFFDFBA6B).withOpacity(0.5)),
+                            borderSide: BorderSide(
+                              color: const Color(0xFFDFBA6B).withOpacity(0.5),
+                            ),
                           ),
                           focusedBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(10),
-                            borderSide: const BorderSide(color: Color(0xFF6B5800), width: 1.5),
+                            borderSide: const BorderSide(
+                              color: Color(0xFF6B5800),
+                              width: 1.5,
+                            ),
                           ),
                         ),
                       ),
@@ -2978,7 +3369,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     TextField(
                       controller: notesController,
                       maxLines: 3,
-                      style: GoogleFonts.montserrat(fontSize: 13, fontWeight: FontWeight.w500),
+                      style: GoogleFonts.montserrat(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                      ),
                       decoration: InputDecoration(
                         hintText: 'Add description...',
                         filled: true,
@@ -2986,15 +3380,22 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         contentPadding: const EdgeInsets.all(12),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(10),
-                          borderSide: const BorderSide(color: Color(0xFFDFBA6B)),
+                          borderSide: const BorderSide(
+                            color: Color(0xFFDFBA6B),
+                          ),
                         ),
                         enabledBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(10),
-                          borderSide: BorderSide(color: const Color(0xFFDFBA6B).withOpacity(0.5)),
+                          borderSide: BorderSide(
+                            color: const Color(0xFFDFBA6B).withOpacity(0.5),
+                          ),
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(10),
-                          borderSide: const BorderSide(color: Color(0xFF6B5800), width: 1.5),
+                          borderSide: const BorderSide(
+                            color: Color(0xFF6B5800),
+                            width: 1.5,
+                          ),
                         ),
                       ),
                     ),
@@ -3003,28 +3404,51 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: const Color(0xFFDFBA6B).withOpacity(0.5)),
+                        border: Border.all(
+                          color: const Color(0xFFDFBA6B).withOpacity(0.5),
+                        ),
                       ),
                       child: ListTile(
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 4,
+                        ),
                         title: Text(
                           'Date & Time',
-                          style: GoogleFonts.montserrat(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey[600]),
+                          style: GoogleFonts.montserrat(
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.grey[600],
+                          ),
                         ),
                         subtitle: Padding(
                           padding: const EdgeInsets.only(top: 4.0),
                           child: Text(
-                            DateFormat('dd MMM yyyy • hh:mm a').format(selectedDate),
-                            style: GoogleFonts.montserrat(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black87),
+                            DateFormat(
+                              'dd MMM yyyy • hh:mm a',
+                            ).format(selectedDate),
+                            style: GoogleFonts.montserrat(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.black87,
+                            ),
                           ),
                         ),
-                        trailing: const Icon(Icons.calendar_today, color: Color(0xFF6B5800), size: 20),
+                        trailing: const Icon(
+                          Icons.calendar_today,
+                          color: Color(0xFF6B5800),
+                          size: 20,
+                        ),
                         onTap: () async {
                           final date = await showDatePicker(
                             context: context,
                             initialDate: selectedDate,
-                            firstDate: selectedDate.subtract(const Duration(days: 365)),
-                            lastDate: DateTime.now().add(const Duration(days: 1)),
+                            firstDate: selectedDate.subtract(
+                              const Duration(days: 365),
+                            ),
+                            lastDate: DateTime.now().add(
+                              const Duration(days: 1),
+                            ),
                           );
                           if (date != null) {
                             final time = await showTimePicker(
@@ -3033,7 +3457,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                             );
                             if (time != null) {
                               setDialogState(() {
-                                selectedDate = DateTime(date.year, date.month, date.day, time.hour, time.minute);
+                                selectedDate = DateTime(
+                                  date.year,
+                                  date.month,
+                                  date.day,
+                                  time.hour,
+                                  time.minute,
+                                );
                               });
                             }
                           }
@@ -3059,7 +3489,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                   backgroundColor: const Color(0xFFFAF6EE),
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(20),
-                                    side: const BorderSide(color: Color(0xFFDFBA6B), width: 1.5),
+                                    side: const BorderSide(
+                                      color: Color(0xFFDFBA6B),
+                                      width: 1.5,
+                                    ),
                                   ),
                                   title: Text(
                                     'Delete Transaction?',
@@ -3070,7 +3503,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                   ),
                                   content: Text(
                                     'Are you sure you want to delete this transaction? This will reverse its impact on the customer\'s outstanding balance.',
-                                    style: GoogleFonts.montserrat(fontSize: 14, color: Colors.black87),
+                                    style: GoogleFonts.montserrat(
+                                      fontSize: 14,
+                                      color: Colors.black87,
+                                    ),
                                   ),
                                   actions: [
                                     TextButton(
@@ -3089,33 +3525,52 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                       onPressed: isDeleting
                                           ? null
                                           : () async {
-                                              setConfirmState(() => isDeleting = true);
+                                              setConfirmState(
+                                                () => isDeleting = true,
+                                              );
                                               final success = await ref
-                                                  .read(transactionNotifierProvider.notifier)
+                                                  .read(
+                                                    transactionNotifierProvider
+                                                        .notifier,
+                                                  )
                                                   .deleteTransaction(txn);
                                               if (mounted) {
                                                 Navigator.pop(confirmContext);
                                                 Navigator.pop(context);
-                                                ScaffoldMessenger.of(context).showSnackBar(
+                                                ScaffoldMessenger.of(
+                                                  context,
+                                                ).showSnackBar(
                                                   SnackBar(
                                                     content: Text(
                                                       success
                                                           ? 'Transaction deleted successfully'
                                                           : 'Failed to delete transaction',
-                                                      style: GoogleFonts.montserrat(
-                                                          fontWeight: FontWeight.w600),
+                                                      style:
+                                                          GoogleFonts.montserrat(
+                                                            fontWeight:
+                                                                FontWeight.w600,
+                                                          ),
                                                     ),
                                                     backgroundColor: success
-                                                        ? const Color(0xFF2E7D32)
-                                                        : const Color(0xFFC62828),
+                                                        ? const Color(
+                                                            0xFF2E7D32,
+                                                          )
+                                                        : const Color(
+                                                            0xFFC62828,
+                                                          ),
                                                   ),
                                                 );
                                               }
                                             },
                                       style: ElevatedButton.styleFrom(
-                                        backgroundColor: const Color(0xFFC62828),
+                                        backgroundColor: const Color(
+                                          0xFFC62828,
+                                        ),
                                         shape: RoundedRectangleBorder(
-                                            borderRadius: BorderRadius.circular(10)),
+                                          borderRadius: BorderRadius.circular(
+                                            10,
+                                          ),
+                                        ),
                                       ),
                                       child: isDeleting
                                           ? const SizedBox(
@@ -3124,15 +3579,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                               child: CircularProgressIndicator(
                                                 strokeWidth: 2,
                                                 valueColor:
-                                                    AlwaysStoppedAnimation<Color>(
-                                                        Colors.white),
+                                                    AlwaysStoppedAnimation<
+                                                      Color
+                                                    >(Colors.white),
                                               ),
                                             )
                                           : Text(
                                               'Delete',
                                               style: GoogleFonts.montserrat(
-                                                  fontWeight: FontWeight.bold,
-                                                  color: Colors.white),
+                                                fontWeight: FontWeight.bold,
+                                                color: Colors.white,
+                                              ),
                                             ),
                                     ),
                                   ],
@@ -3153,11 +3610,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     Row(
                       children: [
                         TextButton(
-                          onPressed: isSaving ? null : () => Navigator.pop(context),
+                          onPressed: isSaving
+                              ? null
+                              : () => Navigator.pop(context),
                           child: Text(
                             'Cancel',
                             style: GoogleFonts.montserrat(
-                                fontWeight: FontWeight.bold, color: Colors.grey[700]),
+                              fontWeight: FontWeight.bold,
+                              color: Colors.grey[700],
+                            ),
                           ),
                         ),
                         const SizedBox(width: 8),
@@ -3165,11 +3626,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           onPressed: isSaving
                               ? null
                               : () async {
-                                  final val = double.tryParse(amountController.text) ?? 0.0;
+                                  final val =
+                                      double.tryParse(amountController.text) ??
+                                      0.0;
                                   if (val <= 0) {
                                     ScaffoldMessenger.of(context).showSnackBar(
                                       const SnackBar(
-                                          content: Text('Please enter a valid amount or weight')),
+                                        content: Text(
+                                          'Please enter a valid amount or weight',
+                                        ),
+                                      ),
                                     );
                                     return;
                                   }
@@ -3178,14 +3644,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
                                   final isMetal = txn.metalType.isNotEmpty;
                                   final TransactionType finalType = isMetal
-                                      ? (isIn ? TransactionType.metalIn : TransactionType.metalOut)
-                                      : (isIn ? TransactionType.receipt : TransactionType.payment);
+                                      ? (isIn
+                                            ? TransactionType.metalIn
+                                            : TransactionType.metalOut)
+                                      : (isIn
+                                            ? TransactionType.receipt
+                                            : TransactionType.payment);
 
                                   String finalPurity = txn.metalPurity;
                                   if (txn.metalType == 'gold') {
                                     finalPurity = purityController.text.trim();
                                   } else if (txn.metalType == 'diamond') {
-                                    finalPurity = '${piecesController.text.trim()} p';
+                                    finalPurity =
+                                        '${piecesController.text.trim()} p';
                                   }
 
                                   final newTx = TransactionModel(
@@ -3194,10 +3665,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                     partyName: txn.partyName,
                                     partyPhone: txn.partyPhone,
                                     type: finalType,
-                                    paymentMode: txn.metalType.isEmpty ? selectedPaymentMode : txn.paymentMode,
-                                    cashAmount: txn.metalType.isEmpty ? val : txn.cashAmount,
+                                    paymentMode: txn.metalType.isEmpty
+                                        ? selectedPaymentMode
+                                        : txn.paymentMode,
+                                    cashAmount: txn.metalType.isEmpty
+                                        ? val
+                                        : txn.cashAmount,
                                     metalType: txn.metalType,
-                                    metalWeight: txn.metalType.isNotEmpty ? val : txn.metalWeight,
+                                    metalWeight: txn.metalType.isNotEmpty
+                                        ? val
+                                        : txn.metalWeight,
                                     metalPurity: finalPurity,
                                     notes: notesController.text,
                                     date: selectedDate,
@@ -3205,8 +3682,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                   );
 
                                   final success = await ref
-                                      .read(transactionNotifierProvider.notifier)
-                                      .updateTransaction(oldTx: txn, newTx: newTx);
+                                      .read(
+                                        transactionNotifierProvider.notifier,
+                                      )
+                                      .updateTransaction(
+                                        oldTx: txn,
+                                        newTx: newTx,
+                                      );
 
                                   if (mounted) {
                                     Navigator.pop(context);
@@ -3217,7 +3699,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                               ? 'Transaction updated successfully'
                                               : 'Failed to update transaction',
                                           style: GoogleFonts.montserrat(
-                                              fontWeight: FontWeight.w600),
+                                            fontWeight: FontWeight.w600,
+                                          ),
                                         ),
                                         backgroundColor: success
                                             ? const Color(0xFF2E7D32)
@@ -3229,21 +3712,26 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFF4A3E1F),
                             shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10)),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
                           ),
                           child: isSaving
                               ? const SizedBox(
                                   width: 18,
                                   height: 18,
                                   child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      valueColor:
-                                          AlwaysStoppedAnimation<Color>(Colors.white)),
+                                    strokeWidth: 2,
+                                    valueColor: AlwaysStoppedAnimation<Color>(
+                                      Colors.white,
+                                    ),
+                                  ),
                                 )
                               : Text(
                                   'Save',
                                   style: GoogleFonts.montserrat(
-                                      fontWeight: FontWeight.bold, color: Colors.white),
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white,
+                                  ),
                                 ),
                         ),
                       ],
@@ -3258,14 +3746,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
   }
 
-  void _showSetAppointmentDialog(BuildContext context, {required bool isTablet}) {
+  void _showSetAppointmentDialog(
+    BuildContext context, {
+    required bool isTablet,
+  }) {
     final customerNameController = TextEditingController();
     final phoneController = TextEditingController();
     final notesController = TextEditingController();
     final customerNameFocusNode = FocusNode();
 
     DateTime selectedDate = DateTime.now().add(const Duration(days: 1));
-    TimeOfDay selectedTime = const TimeOfDay(hour: 14, minute: 30); // 02:30 PM default
+    TimeOfDay selectedTime = const TimeOfDay(
+      hour: 14,
+      minute: 30,
+    ); // 02:30 PM default
     bool remindBefore = false;
     bool showAutocomplete = false;
 
@@ -3277,7 +3771,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           builder: (context, setDialogState) {
             final partiesAsync = ref.watch(partiesStreamProvider);
             final parties = partiesAsync.value ?? [];
-            final formattedDate = DateFormat('MM / dd / yy').format(selectedDate);
+            final formattedDate = DateFormat(
+              'MM / dd / yy',
+            ).format(selectedDate);
             final formattedTime = DateFormat('hh : mm a').format(
               DateTime(2026, 1, 1, selectedTime.hour, selectedTime.minute),
             );
@@ -3290,7 +3786,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               ),
               child: Container(
                 width: isTablet ? 450 : double.infinity,
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 24,
+                ),
                 child: SingleChildScrollView(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
@@ -3335,17 +3834,24 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           ),
                           GestureDetector(
                             onTap: () async {
-                              final newPartyId = await showModalBottomSheet<String>(
-                                context: context,
-                                isScrollControlled: true,
-                                backgroundColor: Colors.transparent,
-                                builder: (context) => const QuickAddPartyBottomSheet(),
-                              );
+                              final newPartyId =
+                                  await showModalBottomSheet<String>(
+                                    context: context,
+                                    isScrollControlled: true,
+                                    backgroundColor: Colors.transparent,
+                                    builder: (context) =>
+                                        const QuickAddPartyBottomSheet(),
+                                  );
                               if (newPartyId != null) {
                                 // Wait a split second for stream to sync, then look it up or auto-fill
-                                final updatedParties = ref.read(partiesStreamProvider).value ?? [];
-                                final matches = updatedParties.where((p) => p.id == newPartyId);
-                                final newParty = matches.isNotEmpty ? matches.first : null;
+                                final updatedParties =
+                                    ref.read(partiesStreamProvider).value ?? [];
+                                final matches = updatedParties.where(
+                                  (p) => p.id == newPartyId,
+                                );
+                                final newParty = matches.isNotEmpty
+                                    ? matches.first
+                                    : null;
                                 if (newParty != null) {
                                   setDialogState(() {
                                     customerNameController.text = newParty.name;
@@ -3354,24 +3860,41 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                   });
                                 } else {
                                   // Fallback: search by ID in a delayed manner or check if we get updates
-                                  Future.delayed(const Duration(milliseconds: 500), () {
-                                    final partiesList = ref.read(partiesStreamProvider).value;
-                                    final delayedMatches = partiesList?.where((p) => p.id == newPartyId);
-                                    final delayedParty = delayedMatches != null && delayedMatches.isNotEmpty ? delayedMatches.first : null;
-                                    if (delayedParty != null) {
-                                      setDialogState(() {
-                                        customerNameController.text = delayedParty.name;
-                                        phoneController.text = delayedParty.phone;
-                                        showAutocomplete = false;
-                                      });
-                                    }
-                                  });
+                                  Future.delayed(
+                                    const Duration(milliseconds: 500),
+                                    () {
+                                      final partiesList = ref
+                                          .read(partiesStreamProvider)
+                                          .value;
+                                      final delayedMatches = partiesList?.where(
+                                        (p) => p.id == newPartyId,
+                                      );
+                                      final delayedParty =
+                                          delayedMatches != null &&
+                                              delayedMatches.isNotEmpty
+                                          ? delayedMatches.first
+                                          : null;
+                                      if (delayedParty != null) {
+                                        setDialogState(() {
+                                          customerNameController.text =
+                                              delayedParty.name;
+                                          phoneController.text =
+                                              delayedParty.phone;
+                                          showAutocomplete = false;
+                                        });
+                                      }
+                                    },
+                                  );
                                 }
                               }
                             },
                             child: Row(
                               children: [
-                                const Icon(Icons.add, color: Color(0xFF735C0F), size: 16),
+                                const Icon(
+                                  Icons.add,
+                                  color: Color(0xFF735C0F),
+                                  size: 16,
+                                ),
                                 const SizedBox(width: 4),
                                 Text(
                                   'New Customer',
@@ -3398,99 +3921,131 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         },
                         decoration: InputDecoration(
                           hintText: 'Search or enter customer...',
-                          hintStyle: GoogleFonts.montserrat(color: Colors.grey[400]),
-                          prefixIcon: const Icon(Icons.person_outline, color: Color(0xFF8A7311)),
+                          hintStyle: GoogleFonts.montserrat(
+                            color: Colors.grey[400],
+                          ),
+                          prefixIcon: const Icon(
+                            Icons.person_outline,
+                            color: Color(0xFF8A7311),
+                          ),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(color: const Color(0xFFE5DEC9).withOpacity(0.8)),
+                            borderSide: BorderSide(
+                              color: const Color(0xFFE5DEC9).withOpacity(0.8),
+                            ),
                           ),
                           enabledBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(color: const Color(0xFFE5DEC9).withOpacity(0.8)),
+                            borderSide: BorderSide(
+                              color: const Color(0xFFE5DEC9).withOpacity(0.8),
+                            ),
                           ),
                           focusedBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
-                            borderSide: const BorderSide(color: Color(0xFF8A7311), width: 1.5),
+                            borderSide: const BorderSide(
+                              color: Color(0xFF8A7311),
+                              width: 1.5,
+                            ),
                           ),
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 14,
+                          ),
                         ),
                       ),
 
                       // Autocomplete Overlay
-                      if (showAutocomplete) Builder(
-                        builder: (context) {
-                          final query = customerNameController.text.toLowerCase().trim();
-                          final matchingParties = query.isEmpty
-                              ? []
-                              : parties
-                                  .where((p) =>
-                                      p.name.toLowerCase().contains(query) ||
-                                      p.phone.contains(query))
-                                  .toList();
+                      if (showAutocomplete)
+                        Builder(
+                          builder: (context) {
+                            final query = customerNameController.text
+                                .toLowerCase()
+                                .trim();
+                            final matchingParties = query.isEmpty
+                                ? []
+                                : parties
+                                      .where(
+                                        (p) =>
+                                            p.name.toLowerCase().contains(
+                                              query,
+                                            ) ||
+                                            p.phone.contains(query),
+                                      )
+                                      .toList();
 
-                          if (matchingParties.isEmpty) return const SizedBox.shrink();
+                            if (matchingParties.isEmpty)
+                              return const SizedBox.shrink();
 
-                          return Container(
-                            margin: const EdgeInsets.only(top: 4),
-                            constraints: const BoxConstraints(maxHeight: 180),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: const Color(0xFFE5DEC9)),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withOpacity(0.05),
-                                  blurRadius: 10,
-                                  offset: const Offset(0, 4),
+                            return Container(
+                              margin: const EdgeInsets.only(top: 4),
+                              constraints: const BoxConstraints(maxHeight: 180),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: const Color(0xFFE5DEC9),
                                 ),
-                              ],
-                            ),
-                            child: ListView.separated(
-                              shrinkWrap: true,
-                              padding: EdgeInsets.zero,
-                              itemCount: matchingParties.length,
-                              separatorBuilder: (context, index) =>
-                                  const Divider(height: 1, color: Color(0xFFFAF6EE)),
-                              itemBuilder: (context, index) {
-                                final party = matchingParties[index];
-                                return ListTile(
-                                  dense: true,
-                                  leading: const CircleAvatar(
-                                    backgroundColor: Color(0xFFFAF6EE),
-                                    child: Icon(Icons.person,
-                                        color: Color(0xFF735C0F), size: 16),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.05),
+                                    blurRadius: 10,
+                                    offset: const Offset(0, 4),
                                   ),
-                                  title: Text(
-                                    party.name,
-                                    style: GoogleFonts.montserrat(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.black87,
+                                ],
+                              ),
+                              child: ListView.separated(
+                                shrinkWrap: true,
+                                padding: EdgeInsets.zero,
+                                itemCount: matchingParties.length,
+                                separatorBuilder: (context, index) =>
+                                    const Divider(
+                                      height: 1,
+                                      color: Color(0xFFFAF6EE),
                                     ),
-                                  ),
-                                  subtitle: Text(
-                                    party.phone.isNotEmpty
-                                        ? party.phone
-                                        : 'No phone saved',
-                                    style: GoogleFonts.montserrat(
-                                      fontSize: 12,
-                                      color: Colors.grey[500],
+                                itemBuilder: (context, index) {
+                                  final party = matchingParties[index];
+                                  return ListTile(
+                                    dense: true,
+                                    leading: const CircleAvatar(
+                                      backgroundColor: Color(0xFFFAF6EE),
+                                      child: Icon(
+                                        Icons.person,
+                                        color: Color(0xFF735C0F),
+                                        size: 16,
+                                      ),
                                     ),
-                                  ),
-                                  onTap: () {
-                                    setDialogState(() {
-                                      customerNameController.text = party.name;
-                                      phoneController.text = party.phone;
-                                      showAutocomplete = false;
-                                    });
-                                    customerNameFocusNode.unfocus();
-                                  },
-                                );
-                              },
-                            ),
-                          );
-                        },
-                      ),
+                                    title: Text(
+                                      party.name,
+                                      style: GoogleFonts.montserrat(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.black87,
+                                      ),
+                                    ),
+                                    subtitle: Text(
+                                      party.phone.isNotEmpty
+                                          ? party.phone
+                                          : 'No phone saved',
+                                      style: GoogleFonts.montserrat(
+                                        fontSize: 12,
+                                        color: Colors.grey[500],
+                                      ),
+                                    ),
+                                    onTap: () {
+                                      setDialogState(() {
+                                        customerNameController.text =
+                                            party.name;
+                                        phoneController.text = party.phone;
+                                        showAutocomplete = false;
+                                      });
+                                      customerNameFocusNode.unfocus();
+                                    },
+                                  );
+                                },
+                              ),
+                            );
+                          },
+                        ),
                       const SizedBox(height: 16),
 
                       // Phone Number Field (Read-only display!)
@@ -3505,27 +4060,45 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       const SizedBox(height: 8),
                       TextField(
                         controller: phoneController,
-                        readOnly: true, // Read-only, auto-filled from selection!
-                        style: GoogleFonts.montserrat(fontSize: 14, color: Colors.black87),
+                        readOnly:
+                            true, // Read-only, auto-filled from selection!
+                        style: GoogleFonts.montserrat(
+                          fontSize: 14,
+                          color: Colors.black87,
+                        ),
                         decoration: InputDecoration(
                           hintText: 'Auto-populated phone number',
-                          hintStyle: GoogleFonts.montserrat(color: Colors.grey[400]),
-                          prefixIcon: const Icon(Icons.phone_outlined, color: Color(0xFF8A7311)),
+                          hintStyle: GoogleFonts.montserrat(
+                            color: Colors.grey[400],
+                          ),
+                          prefixIcon: const Icon(
+                            Icons.phone_outlined,
+                            color: Color(0xFF8A7311),
+                          ),
                           filled: true,
                           fillColor: const Color(0xFFFAF6EE).withOpacity(0.4),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(color: const Color(0xFFE5DEC9).withOpacity(0.5)),
+                            borderSide: BorderSide(
+                              color: const Color(0xFFE5DEC9).withOpacity(0.5),
+                            ),
                           ),
                           enabledBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(color: const Color(0xFFE5DEC9).withOpacity(0.5)),
+                            borderSide: BorderSide(
+                              color: const Color(0xFFE5DEC9).withOpacity(0.5),
+                            ),
                           ),
                           focusedBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(color: const Color(0xFFE5DEC9).withOpacity(0.5)),
+                            borderSide: BorderSide(
+                              color: const Color(0xFFE5DEC9).withOpacity(0.5),
+                            ),
                           ),
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 14,
+                          ),
                         ),
                       ),
                       const SizedBox(height: 16),
@@ -3552,15 +4125,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                       context: context,
                                       initialDate: selectedDate,
                                       firstDate: DateTime.now(),
-                                      lastDate: DateTime.now().add(const Duration(days: 365)),
+                                      lastDate: DateTime.now().add(
+                                        const Duration(days: 365),
+                                      ),
                                       builder: (context, child) {
                                         return Theme(
                                           data: Theme.of(context).copyWith(
-                                            colorScheme: const ColorScheme.light(
-                                              primary: Color(0xFF735C0F),
-                                              onPrimary: Colors.white,
-                                              onSurface: Colors.black,
-                                            ),
+                                            colorScheme:
+                                                const ColorScheme.light(
+                                                  primary: Color(0xFF735C0F),
+                                                  onPrimary: Colors.white,
+                                                  onSurface: Colors.black,
+                                                ),
                                           ),
                                           child: child!,
                                         );
@@ -3573,14 +4149,25 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                     }
                                   },
                                   child: Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 12,
+                                    ),
                                     decoration: BoxDecoration(
-                                      border: Border.all(color: const Color(0xFFE5DEC9).withOpacity(0.8)),
+                                      border: Border.all(
+                                        color: const Color(
+                                          0xFFE5DEC9,
+                                        ).withOpacity(0.8),
+                                      ),
                                       borderRadius: BorderRadius.circular(12),
                                     ),
                                     child: Row(
                                       children: [
-                                        const Icon(Icons.calendar_today_outlined, color: Color(0xFF8A7311), size: 20),
+                                        const Icon(
+                                          Icons.calendar_today_outlined,
+                                          color: Color(0xFF8A7311),
+                                          size: 20,
+                                        ),
                                         const SizedBox(width: 8),
                                         Expanded(
                                           child: Text(
@@ -3621,11 +4208,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                       builder: (context, child) {
                                         return Theme(
                                           data: Theme.of(context).copyWith(
-                                            colorScheme: const ColorScheme.light(
-                                              primary: Color(0xFF735C0F),
-                                              onPrimary: Colors.white,
-                                              onSurface: Colors.black,
-                                            ),
+                                            colorScheme:
+                                                const ColorScheme.light(
+                                                  primary: Color(0xFF735C0F),
+                                                  onPrimary: Colors.white,
+                                                  onSurface: Colors.black,
+                                                ),
                                           ),
                                           child: child!,
                                         );
@@ -3638,14 +4226,25 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                     }
                                   },
                                   child: Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 12,
+                                    ),
                                     decoration: BoxDecoration(
-                                      border: Border.all(color: const Color(0xFFE5DEC9).withOpacity(0.8)),
+                                      border: Border.all(
+                                        color: const Color(
+                                          0xFFE5DEC9,
+                                        ).withOpacity(0.8),
+                                      ),
                                       borderRadius: BorderRadius.circular(12),
                                     ),
                                     child: Row(
                                       children: [
-                                        const Icon(Icons.access_time_outlined, color: Color(0xFF8A7311), size: 20),
+                                        const Icon(
+                                          Icons.access_time_outlined,
+                                          color: Color(0xFF8A7311),
+                                          size: 20,
+                                        ),
                                         const SizedBox(width: 8),
                                         Expanded(
                                           child: Text(
@@ -3684,18 +4283,27 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         style: GoogleFonts.montserrat(fontSize: 14),
                         decoration: InputDecoration(
                           hintText: 'Coming to pick up custom gold chain',
-                          hintStyle: GoogleFonts.montserrat(color: Colors.grey[400]),
+                          hintStyle: GoogleFonts.montserrat(
+                            color: Colors.grey[400],
+                          ),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(color: const Color(0xFFE5DEC9).withOpacity(0.8)),
+                            borderSide: BorderSide(
+                              color: const Color(0xFFE5DEC9).withOpacity(0.8),
+                            ),
                           ),
                           enabledBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(color: const Color(0xFFE5DEC9).withOpacity(0.8)),
+                            borderSide: BorderSide(
+                              color: const Color(0xFFE5DEC9).withOpacity(0.8),
+                            ),
                           ),
                           focusedBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
-                            borderSide: const BorderSide(color: Color(0xFF8A7311), width: 1.5),
+                            borderSide: const BorderSide(
+                              color: Color(0xFF8A7311),
+                              width: 1.5,
+                            ),
                           ),
                           contentPadding: const EdgeInsets.all(16),
                         ),
@@ -3705,7 +4313,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       // Custom Switch Toggle
                       Row(
                         children: [
-                          const Icon(Icons.notifications_active_outlined, color: Color(0xFF735C0F), size: 22),
+                          const Icon(
+                            Icons.notifications_active_outlined,
+                            color: Color(0xFF735C0F),
+                            size: 22,
+                          ),
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
@@ -3720,7 +4332,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           Switch(
                             value: remindBefore,
                             activeColor: const Color(0xFF735C0F),
-                            activeTrackColor: const Color(0xFF735C0F).withOpacity(0.2),
+                            activeTrackColor: const Color(
+                              0xFF735C0F,
+                            ).withOpacity(0.2),
                             inactiveThumbColor: Colors.grey[400],
                             inactiveTrackColor: Colors.grey[200],
                             onChanged: (val) {
@@ -3738,7 +4352,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         onPressed: () async {
                           if (customerNameController.text.trim().isEmpty) {
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Please enter a Customer Name')),
+                              const SnackBar(
+                                content: Text('Please enter a Customer Name'),
+                              ),
                             );
                             return;
                           }
@@ -3751,18 +4367,42 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                             selectedTime.minute,
                           );
 
-                          await ref.read(appointmentNotifierProvider.notifier).createAppointment(
-                                customerName: customerNameController.text.trim(),
+                          await ref
+                              .read(appointmentNotifierProvider.notifier)
+                              .createAppointment(
+                                customerName: customerNameController.text
+                                    .trim(),
                                 phoneNumber: phoneController.text.trim(),
                                 date: dateVal,
                                 notes: notesController.text.trim(),
                                 remindBefore: remindBefore,
                               );
 
+                          final appointmentState = ref.read(
+                            appointmentNotifierProvider,
+                          );
+                          if (appointmentState.hasError) {
+                            if (!context.mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  'Could not set appointment: ${appointmentState.error}',
+                                ),
+                              ),
+                            );
+                            return;
+                          }
+
                           if (context.mounted) {
                             Navigator.pop(context);
+                            ref.read(navigationProvider.notifier).setIndex(3);
+                            ref
+                                .read(reminderNavigationProvider.notifier)
+                                .showAppointments(filter: 'All');
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Appointment set successfully')),
+                              const SnackBar(
+                                content: Text('Appointment set successfully'),
+                              ),
                             );
                           }
                         },
@@ -3777,7 +4417,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            const Icon(Icons.calendar_today_outlined, color: Colors.white, size: 18),
+                            const Icon(
+                              Icons.calendar_today_outlined,
+                              color: Colors.white,
+                              size: 18,
+                            ),
                             const SizedBox(width: 8),
                             Text(
                               'Set Appointment',
@@ -3817,13 +4461,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   void _showSetReminderDialog(TransactionModel activity) {
     final msgController = TextEditingController();
-    
+
     // Set a nice default message
     String defaultMsg = 'Follow up with ${activity.partyName}';
     if (activity.metalType.isEmpty) {
-      defaultMsg += ' for ₹${NumberFormat.decimalPattern('en_IN').format(activity.cashAmount)}';
+      defaultMsg +=
+          ' for ₹${NumberFormat.decimalPattern('en_IN').format(activity.cashAmount)}';
     } else {
-      defaultMsg += ' for ${activity.metalWeight}${activity.metalType == 'gold' ? 'g' : 'ct'} ${activity.metalType}';
+      defaultMsg +=
+          ' for ${activity.metalWeight}${activity.metalType == 'gold' ? 'g' : 'ct'} ${activity.metalType}';
     }
 
     showDialog(
@@ -3882,24 +4528,38 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     TextField(
                       controller: msgController,
                       maxLines: 2,
-                      style: GoogleFonts.montserrat(fontSize: 13, fontWeight: FontWeight.w500),
+                      style: GoogleFonts.montserrat(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                      ),
                       decoration: InputDecoration(
                         hintText: defaultMsg,
-                        hintStyle: GoogleFonts.montserrat(fontSize: 13, color: Colors.grey[400], fontWeight: FontWeight.w400),
+                        hintStyle: GoogleFonts.montserrat(
+                          fontSize: 13,
+                          color: Colors.grey[400],
+                          fontWeight: FontWeight.w400,
+                        ),
                         filled: true,
                         fillColor: Colors.white,
                         contentPadding: const EdgeInsets.all(12),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(10),
-                          borderSide: const BorderSide(color: Color(0xFFDFBA6B)),
+                          borderSide: const BorderSide(
+                            color: Color(0xFFDFBA6B),
+                          ),
                         ),
                         enabledBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(10),
-                          borderSide: BorderSide(color: const Color(0xFFDFBA6B).withOpacity(0.5)),
+                          borderSide: BorderSide(
+                            color: const Color(0xFFDFBA6B).withOpacity(0.5),
+                          ),
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(10),
-                          borderSide: const BorderSide(color: Color(0xFF6B5800), width: 1.5),
+                          borderSide: const BorderSide(
+                            color: Color(0xFF6B5800),
+                            width: 1.5,
+                          ),
                         ),
                       ),
                     ),
@@ -3917,36 +4577,50 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     Wrap(
                       spacing: 8,
                       runSpacing: 8,
-                      children: [
-                        'Tomorrow',
-                        'In 2 days',
-                        'Next Week',
-                        'Custom Date',
-                      ].map((time) {
-                        final isSelected = selectedTimeOption == time;
-                        return GestureDetector(
-                          onTap: () => setDialogState(() => selectedTimeOption = time),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                            decoration: BoxDecoration(
-                              color: isSelected ? const Color(0xFF6B5800) : const Color(0xFFFAF6EE),
-                              borderRadius: BorderRadius.circular(15),
-                              border: Border.all(
-                                color: isSelected ? const Color(0xFF6B5800) : const Color(0xFFE5DEC9),
-                                width: 1.0,
+                      children:
+                          [
+                            'Tomorrow',
+                            'In 2 days',
+                            'Next Week',
+                            'Custom Date',
+                          ].map((time) {
+                            final isSelected = selectedTimeOption == time;
+                            return GestureDetector(
+                              onTap: () => setDialogState(
+                                () => selectedTimeOption = time,
                               ),
-                            ),
-                            child: Text(
-                              time,
-                              style: GoogleFonts.montserrat(
-                                fontSize: 11,
-                                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                                color: isSelected ? Colors.white : const Color(0xFF735C0F),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 14,
+                                  vertical: 8,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: isSelected
+                                      ? const Color(0xFF6B5800)
+                                      : const Color(0xFFFAF6EE),
+                                  borderRadius: BorderRadius.circular(15),
+                                  border: Border.all(
+                                    color: isSelected
+                                        ? const Color(0xFF6B5800)
+                                        : const Color(0xFFE5DEC9),
+                                    width: 1.0,
+                                  ),
+                                ),
+                                child: Text(
+                                  time,
+                                  style: GoogleFonts.montserrat(
+                                    fontSize: 11,
+                                    fontWeight: isSelected
+                                        ? FontWeight.bold
+                                        : FontWeight.w500,
+                                    color: isSelected
+                                        ? Colors.white
+                                        : const Color(0xFF735C0F),
+                                  ),
+                                ),
                               ),
-                            ),
-                          ),
-                        );
-                      }).toList(),
+                            );
+                          }).toList(),
                     ),
                     if (selectedTimeOption == 'Custom Date') ...[
                       const SizedBox(height: 16),
@@ -3954,45 +4628,80 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         decoration: BoxDecoration(
                           color: Colors.white,
                           borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: const Color(0xFFDFBA6B).withOpacity(0.5)),
+                          border: Border.all(
+                            color: const Color(0xFFDFBA6B).withOpacity(0.5),
+                          ),
                         ),
                         child: ListTile(
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 4,
+                          ),
                           title: Text(
                             'Schedule for',
-                            style: GoogleFonts.montserrat(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey[600]),
+                            style: GoogleFonts.montserrat(
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.grey[600],
+                            ),
                           ),
                           subtitle: Padding(
                             padding: const EdgeInsets.only(top: 4.0),
                             child: Text(
                               (customDate != null && customTime != null)
                                   ? DateFormat('dd MMM yyyy • hh:mm a').format(
-                                      DateTime(customDate!.year, customDate!.month, customDate!.day, customTime!.hour, customTime!.minute))
+                                      DateTime(
+                                        customDate!.year,
+                                        customDate!.month,
+                                        customDate!.day,
+                                        customTime!.hour,
+                                        customTime!.minute,
+                                      ),
+                                    )
                                   : 'Select Custom Date & Time',
                               style: GoogleFonts.montserrat(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
-                                  color: (customDate != null && customTime != null) ? Colors.black87 : Colors.grey[500]),
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color:
+                                    (customDate != null && customTime != null)
+                                    ? Colors.black87
+                                    : Colors.grey[500],
+                              ),
                             ),
                           ),
-                          trailing: const Icon(Icons.calendar_today, color: Color(0xFF6B5800), size: 20),
+                          trailing: const Icon(
+                            Icons.calendar_today,
+                            color: Color(0xFF6B5800),
+                            size: 20,
+                          ),
                           onTap: () async {
                             final date = await showDatePicker(
                               context: context,
-                              initialDate: customDate ?? TimeUtils.now.add(const Duration(days: 1)),
+                              initialDate:
+                                  customDate ??
+                                  TimeUtils.now.add(const Duration(days: 1)),
                               firstDate: TimeUtils.now,
-                              lastDate: TimeUtils.now.add(const Duration(days: 365)),
+                              lastDate: TimeUtils.now.add(
+                                const Duration(days: 365),
+                              ),
                               builder: (context, child) {
                                 return Theme(
                                   data: Theme.of(context).copyWith(
                                     colorScheme: const ColorScheme.light(
-                                      primary: Color(0xFF6B5800), // header background color
-                                      onPrimary: Colors.white, // header text color
-                                      onSurface: Color(0xFF4A3E1F), // body text color
+                                      primary: Color(
+                                        0xFF6B5800,
+                                      ), // header background color
+                                      onPrimary:
+                                          Colors.white, // header text color
+                                      onSurface: Color(
+                                        0xFF4A3E1F,
+                                      ), // body text color
                                     ),
                                     textButtonTheme: TextButtonThemeData(
                                       style: TextButton.styleFrom(
-                                        foregroundColor: const Color(0xFF6B5800), // button text color
+                                        foregroundColor: const Color(
+                                          0xFF6B5800,
+                                        ), // button text color
                                       ),
                                     ),
                                   ),
@@ -4004,23 +4713,31 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                               if (!mounted) return;
                               final time = await showTimePicker(
                                 context: context,
-                                initialTime: customTime ?? const TimeOfDay(hour: 11, minute: 30),
+                                initialTime:
+                                    customTime ??
+                                    const TimeOfDay(hour: 11, minute: 30),
                                 builder: (context, child) {
                                   return Theme(
                                     data: Theme.of(context).copyWith(
                                       colorScheme: const ColorScheme.light(
-                                        primary: Color(0xFF6B5800), // clock selection color
+                                        primary: Color(
+                                          0xFF6B5800,
+                                        ), // clock selection color
                                         onPrimary: Colors.white,
                                         onSurface: Color(0xFF4A3E1F),
                                       ),
                                       textButtonTheme: TextButtonThemeData(
                                         style: TextButton.styleFrom(
-                                          foregroundColor: const Color(0xFF6B5800),
+                                          foregroundColor: const Color(
+                                            0xFF6B5800,
+                                          ),
                                         ),
                                       ),
                                     ),
                                     child: MediaQuery(
-                                      data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: false),
+                                      data: MediaQuery.of(
+                                        context,
+                                      ).copyWith(alwaysUse24HourFormat: false),
                                       child: child!,
                                     ),
                                   );
@@ -4045,53 +4762,86 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   onPressed: isSaving ? null : () => Navigator.pop(context),
                   child: Text(
                     'Cancel',
-                    style: GoogleFonts.montserrat(fontWeight: FontWeight.bold, color: Colors.grey[700]),
+                    style: GoogleFonts.montserrat(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.grey[700],
+                    ),
                   ),
                 ),
                 ElevatedButton(
                   onPressed: isSaving
                       ? null
                       : () async {
-                          final noteText = msgController.text.trim().isEmpty 
-                              ? defaultMsg 
+                          final noteText = msgController.text.trim().isEmpty
+                              ? defaultMsg
                               : msgController.text.trim();
 
-                           DateTime finalReminderDate;
-                           if (selectedTimeOption == 'Tomorrow') {
-                             final baseDate = TimeUtils.now.add(const Duration(days: 1));
-                             finalReminderDate = DateTime(baseDate.year, baseDate.month, baseDate.day, 11, 30);
-                           } else if (selectedTimeOption == 'In 2 days') {
-                             final baseDate = TimeUtils.now.add(const Duration(days: 2));
-                             finalReminderDate = DateTime(baseDate.year, baseDate.month, baseDate.day, 11, 30);
-                           } else if (selectedTimeOption == 'Next Week') {
-                             final baseDate = TimeUtils.now.add(const Duration(days: 7));
-                             finalReminderDate = DateTime(baseDate.year, baseDate.month, baseDate.day, 11, 30);
-                           } else {
-                             if (customDate == null || customTime == null) {
-                               ScaffoldMessenger.of(context).showSnackBar(
-                                 const SnackBar(content: Text('Please select custom date and time')),
-                               );
-                               return;
-                             }
-                             finalReminderDate = DateTime(
-                               customDate!.year,
-                               customDate!.month,
-                               customDate!.day,
-                               customTime!.hour,
-                               customTime!.minute,
-                             );
-                           }
+                          DateTime finalReminderDate;
+                          if (selectedTimeOption == 'Tomorrow') {
+                            final baseDate = TimeUtils.now.add(
+                              const Duration(days: 1),
+                            );
+                            finalReminderDate = DateTime(
+                              baseDate.year,
+                              baseDate.month,
+                              baseDate.day,
+                              11,
+                              30,
+                            );
+                          } else if (selectedTimeOption == 'In 2 days') {
+                            final baseDate = TimeUtils.now.add(
+                              const Duration(days: 2),
+                            );
+                            finalReminderDate = DateTime(
+                              baseDate.year,
+                              baseDate.month,
+                              baseDate.day,
+                              11,
+                              30,
+                            );
+                          } else if (selectedTimeOption == 'Next Week') {
+                            final baseDate = TimeUtils.now.add(
+                              const Duration(days: 7),
+                            );
+                            finalReminderDate = DateTime(
+                              baseDate.year,
+                              baseDate.month,
+                              baseDate.day,
+                              11,
+                              30,
+                            );
+                          } else {
+                            if (customDate == null || customTime == null) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    'Please select custom date and time',
+                                  ),
+                                ),
+                              );
+                              return;
+                            }
+                            finalReminderDate = DateTime(
+                              customDate!.year,
+                              customDate!.month,
+                              customDate!.day,
+                              customTime!.hour,
+                              customTime!.minute,
+                            );
+                          }
 
                           setDialogState(() => isSaving = true);
 
-                          await ref.read(reminderNotifierProvider.notifier).createReminder(
-                            partyId: activity.partyId,
-                            partyName: activity.partyName,
-                            partyPhone: activity.partyPhone,
-                            title: 'Reminder',
-                            note: noteText,
-                            date: finalReminderDate,
-                          );
+                          await ref
+                              .read(reminderNotifierProvider.notifier)
+                              .createReminder(
+                                partyId: activity.partyId,
+                                partyName: activity.partyName,
+                                partyPhone: activity.partyPhone,
+                                title: 'Reminder',
+                                note: noteText,
+                                date: finalReminderDate,
+                              );
 
                           if (mounted) {
                             Navigator.pop(context);
@@ -4099,7 +4849,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                               SnackBar(
                                 content: Text(
                                   'Reminder set successfully',
-                                  style: GoogleFonts.montserrat(fontWeight: FontWeight.w600),
+                                  style: GoogleFonts.montserrat(
+                                    fontWeight: FontWeight.w600,
+                                  ),
                                 ),
                                 backgroundColor: const Color(0xFF2E7D32),
                               ),
@@ -4108,17 +4860,27 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF4A3E1F),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
                   ),
                   child: isSaving
                       ? const SizedBox(
                           width: 18,
                           height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation<Color>(Colors.white)),
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              Colors.white,
+                            ),
+                          ),
                         )
                       : Text(
                           'Set Reminder',
-                          style: GoogleFonts.montserrat(fontWeight: FontWeight.bold, color: Colors.white),
+                          style: GoogleFonts.montserrat(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
                         ),
                 ),
               ],
@@ -4167,7 +4929,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     String amountStr,
     String badgeText,
   ) {
-    final isCredit = t.type == TransactionType.receipt || t.type == TransactionType.metalIn;
+    final isCredit =
+        t.type == TransactionType.receipt || t.type == TransactionType.metalIn;
     final dateStr = DateFormat('dd MMM yyyy').format(t.date);
     final timeStr = DateFormat('hh:mm a').format(t.date);
 
@@ -4186,7 +4949,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 decoration: BoxDecoration(
                   color: const Color(0xFFFAF6EE),
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: const Color(0xFFDFBA6B), width: 1.5),
+                  border: Border.all(
+                    color: const Color(0xFFDFBA6B),
+                    width: 1.5,
+                  ),
                   boxShadow: [
                     BoxShadow(
                       color: Colors.black.withOpacity(0.15),
@@ -4200,7 +4966,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   children: [
                     // Header of dialog
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 16,
+                      ),
                       decoration: const BoxDecoration(
                         color: Color(0xFF01565B),
                         borderRadius: BorderRadius.only(
@@ -4220,7 +4989,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                             ),
                           ),
                           IconButton(
-                            icon: const Icon(Icons.close, color: Colors.white, size: 20),
+                            icon: const Icon(
+                              Icons.close,
+                              color: Colors.white,
+                              size: 20,
+                            ),
                             onPressed: () => Navigator.pop(context),
                             padding: EdgeInsets.zero,
                             constraints: const BoxConstraints(),
@@ -4236,7 +5009,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            const CircularProgressIndicator(color: Color(0xFF01565B)),
+                            const CircularProgressIndicator(
+                              color: Color(0xFF01565B),
+                            ),
                             const SizedBox(height: 20),
                             Text(
                               'Connecting to printer...',
@@ -4322,7 +5097,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           decoration: BoxDecoration(
                             color: Colors.white,
                             borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: Colors.grey.withOpacity(0.2)),
+                            border: Border.all(
+                              color: Colors.grey.withOpacity(0.2),
+                            ),
                             boxShadow: [
                               BoxShadow(
                                 color: Colors.black.withOpacity(0.02),
@@ -4365,8 +5142,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                               // Receipt Metadata
                               _buildReceiptRow('Date:', '$dateStr  $timeStr'),
                               _buildReceiptRow('Customer Name:', t.partyName),
-                              _buildReceiptRow('Type:', isCredit ? 'IN' : 'OUT'),
-                              _buildReceiptRow('Category:', t.metalType.isEmpty ? 'Money' : t.metalType.toUpperCase()),
+                              _buildReceiptRow(
+                                'Type:',
+                                isCredit ? 'IN' : 'OUT',
+                              ),
+                              _buildReceiptRow(
+                                'Category:',
+                                t.metalType.isEmpty
+                                    ? 'Money'
+                                    : t.metalType.toUpperCase(),
+                              ),
                               if (badgeText.isNotEmpty)
                                 _buildReceiptRow('Particulars:', badgeText),
 
@@ -4378,14 +5163,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
                               // Amount / Details Highlight
                               Container(
-                                padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 10,
+                                  horizontal: 12,
+                                ),
                                 decoration: BoxDecoration(
                                   color: const Color(0xFFFAF6EE),
                                   borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(color: const Color(0xFFE5DEC9)),
+                                  border: Border.all(
+                                    color: const Color(0xFFE5DEC9),
+                                  ),
                                 ),
                                 child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
                                   children: [
                                     Text(
                                       'TOTAL AMOUNT:',
@@ -4400,7 +5191,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                       style: GoogleFonts.montserrat(
                                         fontSize: 16,
                                         fontWeight: FontWeight.bold,
-                                        color: isCredit ? const Color(0xFF01565B) : const Color(0xFFC62828),
+                                        color: isCredit
+                                            ? const Color(0xFF01565B)
+                                            : const Color(0xFFC62828),
                                       ),
                                     ),
                                   ],
@@ -4423,7 +5216,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                               Center(
                                 child: Column(
                                   children: [
-                                    Icon(Icons.bar_chart_rounded, size: 40, color: Colors.grey[600]),
+                                    Icon(
+                                      Icons.bar_chart_rounded,
+                                      size: 40,
+                                      color: Colors.grey[600],
+                                    ),
                                     const SizedBox(height: 4),
                                     Text(
                                       'Thank you for your business!',
@@ -4443,7 +5240,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
                       // Print Dialog Actions
                       Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 12,
+                        ),
                         child: Row(
                           children: [
                             Expanded(
@@ -4453,17 +5253,22 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                     isPrinting = true;
                                   });
                                   try {
-                                    final pdfBytes = await PdfService.generateReceiptPdf(
-                                      transaction: t,
-                                      amountStr: amountStr,
-                                      badgeText: badgeText,
-                                    );
+                                    final pdfBytes =
+                                        await PdfService.generateReceiptPdf(
+                                          transaction: t,
+                                          amountStr: amountStr,
+                                          badgeText: badgeText,
+                                        );
                                     await PdfService.printPdf(pdfBytes);
                                     if (context.mounted) Navigator.pop(context);
                                   } catch (e) {
                                     if (context.mounted) {
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(content: Text('Error printing: $e')),
+                                      ScaffoldMessenger.of(
+                                        context,
+                                      ).showSnackBar(
+                                        SnackBar(
+                                          content: Text('Error printing: $e'),
+                                        ),
                                       );
                                     }
                                     setDialogState(() {
@@ -4471,7 +5276,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                     });
                                   }
                                 },
-                                icon: const Icon(Icons.print_rounded, size: 18, color: Color(0xFF01565B)),
+                                icon: const Icon(
+                                  Icons.print_rounded,
+                                  size: 18,
+                                  color: Color(0xFF01565B),
+                                ),
                                 label: Text(
                                   'Print',
                                   style: GoogleFonts.montserrat(
@@ -4481,8 +5290,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                   ),
                                 ),
                                 style: OutlinedButton.styleFrom(
-                                  side: const BorderSide(color: Color(0xFF01565B), width: 1.5),
-                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                  side: const BorderSide(
+                                    color: Color(0xFF01565B),
+                                    width: 1.5,
+                                  ),
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 12,
+                                  ),
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(10),
                                   ),
@@ -4497,23 +5311,29 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                     isPrinting = true;
                                   });
                                   try {
-                                    final pdfBytes = await PdfService.generateReceiptPdf(
-                                      transaction: t,
-                                      amountStr: amountStr,
-                                      badgeText: badgeText,
-                                    );
-                                    final success = await PdfService.savePdfToDownloads(
-                                      pdfBytes,
-                                      'Receipt_${t.partyName.replaceAll(' ', '_')}_${DateFormat('ddMMMyyyy').format(t.date)}',
-                                    );
+                                    final pdfBytes =
+                                        await PdfService.generateReceiptPdf(
+                                          transaction: t,
+                                          amountStr: amountStr,
+                                          badgeText: badgeText,
+                                        );
+                                    final success =
+                                        await PdfService.savePdfToDownloads(
+                                          pdfBytes,
+                                          'Receipt_${t.partyName.replaceAll(' ', '_')}_${DateFormat('ddMMMyyyy').format(t.date)}',
+                                        );
                                     setDialogState(() {
                                       isPrinting = false;
                                       isSaved = success;
                                     });
                                   } catch (e) {
                                     if (context.mounted) {
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(content: Text('Error saving PDF: $e')),
+                                      ScaffoldMessenger.of(
+                                        context,
+                                      ).showSnackBar(
+                                        SnackBar(
+                                          content: Text('Error saving PDF: $e'),
+                                        ),
                                       );
                                     }
                                     setDialogState(() {
@@ -4521,7 +5341,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                     });
                                   }
                                 },
-                                icon: const Icon(Icons.picture_as_pdf, size: 18, color: Colors.white),
+                                icon: const Icon(
+                                  Icons.picture_as_pdf,
+                                  size: 18,
+                                  color: Colors.white,
+                                ),
                                 label: Text(
                                   'Save PDF',
                                   style: GoogleFonts.montserrat(
@@ -4532,7 +5356,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                 ),
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: const Color(0xFF01565B),
-                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 12,
+                                  ),
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(10),
                                   ),
@@ -4759,7 +5585,9 @@ class _TabletQuickAddEntryDialogState
                     );
                     if (newId != null && newId is String) {
                       final list = ref.read(partiesStreamProvider).value ?? [];
-                      final found = list.where((p) => p.id == newId).firstOrNull;
+                      final found = list
+                          .where((p) => p.id == newId)
+                          .firstOrNull;
                       if (found != null) {
                         setState(() {
                           _selectedParty = found;
@@ -5769,7 +6597,6 @@ class _TabletQuickAddEntryDialogState
       }
     }
   }
-
 }
 
 class _IndianCurrencyFormatter extends TextInputFormatter {
@@ -5801,4 +6628,3 @@ class _IndianCurrencyFormatter extends TextInputFormatter {
     }
   }
 }
-
