@@ -136,6 +136,32 @@ class AuthService {
     }
     return null;
   }
-}
 
+  /// POST /api/user-profiles/verify-session — check if this device has a valid staff session
+  Future<Map<String, dynamic>?> verifyStaffSession(String androidId) async {
+    try {
+      final url = '$baseUrl/user-profiles/verify-session';
+      debugPrint('[AuthService] POST $url');
+      final response = await http.post(
+        Uri.parse(url),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'androidId': androidId}),
+      ).timeout(const Duration(seconds: 15));
+
+      debugPrint('[AuthService] verify-session status: ${response.statusCode}');
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['valid'] == true) {
+          debugPrint('[AuthService] Valid staff session found');
+          return data;
+        }
+      }
+      debugPrint('[AuthService] No valid staff session');
+      return null;
+    } catch (e) {
+      debugPrint('[AuthService] Error in verifyStaffSession: $e');
+      return null;
+    }
+  }
+}
 

@@ -18,6 +18,9 @@ class TransactionModel {
   final String notes;
   final DateTime date;
   final DateTime createdAt;
+  final String? createdBy;
+  final String? updatedBy;
+  final DateTime? updatedAt;
 
   const TransactionModel({
     required this.id,
@@ -33,6 +36,9 @@ class TransactionModel {
     required this.notes,
     required this.date,
     required this.createdAt,
+    this.createdBy,
+    this.updatedBy,
+    this.updatedAt,
   });
 
   factory TransactionModel.fromMap(String id, Map<String, dynamic> map) {
@@ -56,6 +62,9 @@ class TransactionModel {
       notes: map['notes'] as String? ?? '',
       date: map['date'] != null ? TimeUtils.to2007(DateTime.parse(map['date']).toLocal()) : TimeUtils.now,
       createdAt: map['createdAt'] != null ? TimeUtils.to2007(DateTime.parse(map['createdAt']).toLocal()) : TimeUtils.now,
+      createdBy: map['createdBy'] as String?,
+      updatedBy: map['updatedBy'] as String?,
+      updatedAt: map['updatedAt'] != null ? TimeUtils.to2007(DateTime.parse(map['updatedAt']).toLocal()) : null,
     );
   }
 
@@ -73,6 +82,9 @@ class TransactionModel {
       'notes': notes,
       'date': date.toUtc().toIso8601String(),
       'createdAt': createdAt.toUtc().toIso8601String(),
+      if (createdBy != null) 'createdBy': createdBy,
+      if (updatedBy != null) 'updatedBy': updatedBy,
+      if (updatedAt != null) 'updatedAt': updatedAt!.toUtc().toIso8601String(),
     };
   }
 

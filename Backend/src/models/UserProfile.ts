@@ -13,6 +13,12 @@ export interface IUserProfile {
     deviceModel: string;
     platform: string;
   };
+  approvedDeviceId: string | null;
+  approvedDeviceBrand: string | null;
+  approvedDeviceModel: string | null;
+  pendingDeviceId: string | null;
+  pendingDeviceBrand: string | null;
+  pendingDeviceModel: string | null;
   expiresAt: Date | null;
   createdAt?: Date;
   updatedAt?: Date;
@@ -36,6 +42,12 @@ const userProfileSchema = new Schema<IUserProfile>(
       deviceModel: { type: String, default: '' },
       platform: { type: String, default: '' },
     },
+    approvedDeviceId: { type: String, default: null },
+    approvedDeviceBrand: { type: String, default: null },
+    approvedDeviceModel: { type: String, default: null },
+    pendingDeviceId: { type: String, default: null },
+    pendingDeviceBrand: { type: String, default: null },
+    pendingDeviceModel: { type: String, default: null },
     expiresAt: { type: Date, default: null },
   },
   {

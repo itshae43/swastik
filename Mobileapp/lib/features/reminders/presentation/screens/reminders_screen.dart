@@ -644,6 +644,7 @@ class _RemindersScreenState extends ConsumerState<RemindersScreen>
                   ),
                   child: TextField(
                     controller: notesController,
+                    textCapitalization: TextCapitalization.characters,
                     style: GoogleFonts.montserrat(fontSize: isTablet ? 16 : 14),
                     decoration: InputDecoration(
                       border: InputBorder.none,

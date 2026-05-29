@@ -2087,6 +2087,7 @@ class _PartyDetailScreenState extends ConsumerState<PartyDetailScreen> {
                     const SizedBox(height: 8),
                     TextField(
                       controller: notesController,
+                      textCapitalization: TextCapitalization.characters,
                       maxLines: 3,
                       style: GoogleFonts.montserrat(fontSize: 13, fontWeight: FontWeight.w500),
                       decoration: InputDecoration(

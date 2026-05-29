@@ -37,7 +37,7 @@ class TransactionService {
       final allPartiesRes = await http.get(
         Uri.parse('$baseUrl/parties'),
         headers: _getHeaders(),
-      );
+      ).timeout(const Duration(seconds: 30));
       if (allPartiesRes.statusCode == 200) {
         final List allParties = jsonDecode(allPartiesRes.body);
         final partyMap = allParties.firstWhere((p) => p['_id'] == transaction.partyId, orElse: () => null);
@@ -75,11 +75,14 @@ class TransactionService {
             updatedAt: TimeUtils.now,
           );
 
-          await http.put(
+          final response = await http.put(
             Uri.parse('$baseUrl/parties/${party.id}'),
             headers: _getHeaders(),
             body: jsonEncode(updatedParty.toMap()),
-          );
+          ).timeout(const Duration(seconds: 30));
+          if (response.statusCode != 200 && response.statusCode != 201) {
+            throw Exception('Failed to update party balance');
+          }
         }
       }
     } catch (e) {
@@ -87,11 +90,15 @@ class TransactionService {
     }
 
     // 2. Create Transaction
-    await http.post(
+    final response = await http.post(
       Uri.parse('$baseUrl/transactions'),
       headers: _getHeaders(),
       body: jsonEncode(transaction.toMap()),
-    );
+    ).timeout(const Duration(seconds: 30));
+
+    if (response.statusCode != 200 && response.statusCode != 201) {
+      throw Exception('Failed to create transaction');
+    }
   }
 
   Future<void> deleteTransaction(TransactionModel transaction) async {
@@ -100,7 +107,7 @@ class TransactionService {
       final allPartiesRes = await http.get(
         Uri.parse('$baseUrl/parties'),
         headers: _getHeaders(),
-      );
+      ).timeout(const Duration(seconds: 30));
       if (allPartiesRes.statusCode == 200) {
         final List allParties = jsonDecode(allPartiesRes.body);
         final partyMap = allParties.firstWhere((p) => p['_id'] == transaction.partyId, orElse: () => null);
@@ -140,11 +147,14 @@ class TransactionService {
             updatedAt: TimeUtils.now,
           );
 
-          await http.put(
+          final response = await http.put(
             Uri.parse('$baseUrl/parties/${party.id}'),
             headers: _getHeaders(),
             body: jsonEncode(updatedParty.toMap()),
-          );
+          ).timeout(const Duration(seconds: 30));
+          if (response.statusCode != 200 && response.statusCode != 201) {
+            throw Exception('Failed to update party balance');
+          }
         }
       }
     } catch (e) {
@@ -152,10 +162,14 @@ class TransactionService {
     }
 
     // 2. Delete Transaction
-    await http.delete(
+    final response = await http.delete(
       Uri.parse('$baseUrl/transactions/${transaction.id}'),
       headers: _getHeaders(),
-    );
+    ).timeout(const Duration(seconds: 30));
+
+    if (response.statusCode != 200 && response.statusCode != 201) {
+      throw Exception('Failed to delete transaction');
+    }
   }
 
   Future<void> updateTransaction(TransactionModel oldTx, TransactionModel newTx) async {
@@ -164,7 +178,7 @@ class TransactionService {
       final allPartiesRes = await http.get(
         Uri.parse('$baseUrl/parties'),
         headers: _getHeaders(),
-      );
+      ).timeout(const Duration(seconds: 30));
       if (allPartiesRes.statusCode == 200) {
         final List allParties = jsonDecode(allPartiesRes.body);
         final partyMap = allParties.firstWhere((p) => p['_id'] == oldTx.partyId, orElse: () => null);
@@ -224,11 +238,14 @@ class TransactionService {
             updatedAt: TimeUtils.now,
           );
 
-          await http.put(
+          final response = await http.put(
             Uri.parse('$baseUrl/parties/${party.id}'),
             headers: _getHeaders(),
             body: jsonEncode(updatedParty.toMap()),
-          );
+          ).timeout(const Duration(seconds: 30));
+          if (response.statusCode != 200 && response.statusCode != 201) {
+            throw Exception('Failed to update party balance');
+          }
         }
       }
     } catch (e) {
@@ -236,11 +253,15 @@ class TransactionService {
     }
 
     // 2. Update Transaction
-    await http.put(
+    final response = await http.put(
       Uri.parse('$baseUrl/transactions/${newTx.id}'),
       headers: _getHeaders(),
       body: jsonEncode(newTx.toMap()),
-    );
+    ).timeout(const Duration(seconds: 30));
+
+    if (response.statusCode != 200 && response.statusCode != 201) {
+      throw Exception('Failed to update transaction');
+    }
   }
 
   Stream<List<TransactionModel>> transactionsStream(String userId) async* {
@@ -249,7 +270,7 @@ class TransactionService {
         final res = await http.get(
           Uri.parse('$baseUrl/transactions'),
           headers: _getHeaders(),
-        );
+        ).timeout(const Duration(seconds: 10));
         if (res.statusCode == 200) {
           final List data = jsonDecode(res.body);
           final list = data.map((e) => TransactionModel.fromMap(e['_id'], e as Map<String, dynamic>)).toList();
@@ -267,7 +288,7 @@ class TransactionService {
         final res = await http.get(
           Uri.parse('$baseUrl/transactions'),
           headers: _getHeaders(),
-        );
+        ).timeout(const Duration(seconds: 10));
         if (res.statusCode == 200) {
           final List data = jsonDecode(res.body);
           final list = data.map((e) => TransactionModel.fromMap(e['_id'], e as Map<String, dynamic>)).toList();
@@ -286,7 +307,7 @@ class TransactionService {
         final res = await http.get(
           Uri.parse('$baseUrl/daily-balances'),
           headers: _getHeaders(),
-        );
+        ).timeout(const Duration(seconds: 10));
         if (res.statusCode == 200) {
           final List data = jsonDecode(res.body);
           final list = data.map((e) => DailyClosingBalanceModel.fromMap(e as Map<String, dynamic>)).toList();

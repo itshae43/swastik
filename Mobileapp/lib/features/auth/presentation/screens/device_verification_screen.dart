@@ -6,6 +6,7 @@ import 'package:swastik_mobile_app/core/utils/responsive_utils.dart';
 import 'package:swastik_mobile_app/features/auth/models/user_profile.dart';
 import 'package:swastik_mobile_app/features/auth/providers/auth_providers.dart';
 import 'package:swastik_mobile_app/features/auth/providers/user_profiles_provider.dart';
+import 'package:swastik_mobile_app/core/utils/device_identity.dart';
 
 class DeviceVerificationScreen extends ConsumerStatefulWidget {
   const DeviceVerificationScreen({super.key});
@@ -1106,6 +1107,13 @@ class _DeviceVerificationScreenState
 
     final isPending = currentProfile.status == 'pending_approval' ||
         currentProfile.requestPending;
+        
+    final isOtherDeviceSession = currentProfile.sessionActive && 
+        currentProfile.approvedDeviceId != null && 
+        currentProfile.approvedDeviceId != DeviceIdentity.androidId;
+        
+    final isMySession = currentProfile.sessionActive && 
+        (currentProfile.approvedDeviceId == null || currentProfile.approvedDeviceId == DeviceIdentity.androidId);
 
     if (isPending && _countdownTimer == null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -1188,22 +1196,22 @@ class _DeviceVerificationScreenState
                 width: isTablet ? 84 : 76,
                 height: isTablet ? 84 : 76,
                 decoration: BoxDecoration(
-                  color: currentProfile.sessionActive
+                  color: isOtherDeviceSession
                       ? const Color(0xFFFFF2F2)
                       : const Color(0xFFFFFDF0),
                   shape: BoxShape.circle,
                   border: Border.all(
-                    color: currentProfile.sessionActive
+                    color: isOtherDeviceSession
                         ? const Color(0xFFFFCDD2)
                         : const Color(0xFFF9E8B9),
                     width: 2,
                   ),
                 ),
                 child: Icon(
-                  currentProfile.sessionActive
+                  isOtherDeviceSession
                       ? Icons.lock_outline_rounded
                       : Icons.person_rounded,
-                  color: currentProfile.sessionActive
+                  color: isOtherDeviceSession
                       ? const Color(0xFFD32F2F)
                       : const Color(0xFF8B6C1C),
                   size: isTablet ? 40 : 36,
@@ -1239,14 +1247,14 @@ class _DeviceVerificationScreenState
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 decoration: BoxDecoration(
-                  color: currentProfile.sessionActive
+                  color: isOtherDeviceSession
                       ? const Color(0xFFFFF2F2)
                       : isPending
                           ? const Color(0xFFFFF8E1)
                           : const Color(0xFFECEFF1),
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(
-                    color: currentProfile.sessionActive
+                    color: isOtherDeviceSession
                         ? const Color(0xFFFFCDD2)
                         : isPending
                             ? const Color(0xFFFFECB3)
@@ -1261,7 +1269,7 @@ class _DeviceVerificationScreenState
                       width: 8,
                       height: 8,
                       decoration: BoxDecoration(
-                        color: currentProfile.sessionActive
+                        color: isOtherDeviceSession
                             ? const Color(0xFFD32F2F)
                             : isPending
                                 ? const Color(0xFFFFB300)
@@ -1271,7 +1279,7 @@ class _DeviceVerificationScreenState
                     ),
                     const SizedBox(width: 8),
                     Text(
-                      currentProfile.sessionActive
+                      isOtherDeviceSession
                           ? 'Status: Active Session (Locked)'
                           : isPending
                               ? 'Status: Pending Approval'
@@ -1279,7 +1287,7 @@ class _DeviceVerificationScreenState
                       style: GoogleFonts.montserrat(
                         fontSize: isTablet ? 13 : 12,
                         fontWeight: FontWeight.bold,
-                        color: currentProfile.sessionActive
+                        color: isOtherDeviceSession
                             ? const Color(0xFFD32F2F)
                             : isPending
                                 ? const Color(0xFF8B6C1C)
@@ -1293,7 +1301,7 @@ class _DeviceVerificationScreenState
           ),
         ),
         const SizedBox(height: 32),
-        if (currentProfile.sessionActive) ...[
+        if (isOtherDeviceSession) ...[
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(18),
@@ -1409,7 +1417,7 @@ class _DeviceVerificationScreenState
                     const SizedBox(width: 14),
                     Expanded(
                       child: Text(
-                        'Access request sent! Please wait for Admin approval to login.',
+                        'Your account is waiting for admin approval.',
                         style: GoogleFonts.montserrat(
                           fontSize: isTablet ? 14 : 13,
                           fontWeight: FontWeight.bold,

@@ -53,6 +53,12 @@ let fallbackUserProfiles: any[] = [
       deviceModel: 'Pixel 6',
       platform: 'android'
     },
+    approvedDeviceId: null,
+    approvedDeviceBrand: null,
+    approvedDeviceModel: null,
+    pendingDeviceId: null,
+    pendingDeviceBrand: null,
+    pendingDeviceModel: null,
     expiresAt: null,
     createdAt: new Date(),
     updatedAt: new Date()
@@ -98,6 +104,12 @@ async function seedUserProfile() {
           deviceModel: '',
           platform: '',
         },
+        approvedDeviceId: null,
+        approvedDeviceBrand: null,
+        approvedDeviceModel: null,
+        pendingDeviceId: null,
+        pendingDeviceBrand: null,
+        pendingDeviceModel: null,
         expiresAt: null,
       });
       await defaultProfile.save();
@@ -250,9 +262,9 @@ app.get('/api/devices', async (req: Request, res: Response) => {
           id: profile._id.toString(),
           userName: profile.name,
           phoneNumber: profile.mobile,
-          brand: profile.deviceInfo.platform === 'android' ? 'Android' : (profile.deviceInfo.platform === 'ios' ? 'iOS' : 'Device'),
-          model: profile.deviceInfo.deviceModel || 'Staff Device',
-          androidId: `profile_${profile._id.toString()}`,
+          brand: profile.approvedDeviceBrand || (profile.deviceInfo.platform === 'android' ? 'Android' : (profile.deviceInfo.platform === 'ios' ? 'iOS' : 'Device')),
+          model: profile.approvedDeviceModel || profile.deviceInfo.deviceModel || 'Staff Device',
+          androidId: profile.approvedDeviceId || `profile_${profile._id.toString()}`,
           lastActive: profile.lastApprovalTime 
             ? `Active since ${new Date(profile.lastApprovalTime).toLocaleTimeString()}`
             : 'Active Now'
@@ -265,9 +277,9 @@ app.get('/api/devices', async (req: Request, res: Response) => {
             id: profile._id,
             userName: profile.name,
             phoneNumber: profile.mobile,
-            brand: profile.deviceInfo.platform === 'android' ? 'Android' : (profile.deviceInfo.platform === 'ios' ? 'iOS' : 'Device'),
-            model: profile.deviceInfo.deviceModel || 'Staff Device',
-            androidId: `profile_${profile._id}`,
+            brand: profile.approvedDeviceBrand || (profile.deviceInfo.platform === 'android' ? 'Android' : (profile.deviceInfo.platform === 'ios' ? 'iOS' : 'Device')),
+            model: profile.approvedDeviceModel || profile.deviceInfo.deviceModel || 'Staff Device',
+            androidId: profile.approvedDeviceId || `profile_${profile._id}`,
             lastActive: profile.lastApprovalTime 
               ? `Active since ${new Date(profile.lastApprovalTime).toLocaleTimeString()}`
               : 'Active Now'
@@ -294,6 +306,11 @@ app.delete('/api/devices/:id', async (req: Request, res: Response) => {
         profile.sessionActive = false;
         profile.status = 'inactive';
         profile.requestPending = false;
+        profile.approvedDeviceId = null;
+        profile.approvedDeviceBrand = null;
+        profile.approvedDeviceModel = null;
+        profile.expiresAt = null;
+        profile.lastApprovalTime = null;
         await profile.save();
         console.log(`Deauthorized UserProfile session ${id} remotely.`);
         return res.json({ success: true, message: 'User profile session terminated successfully.' });
@@ -304,6 +321,11 @@ app.delete('/api/devices/:id', async (req: Request, res: Response) => {
         profile.sessionActive = false;
         profile.status = 'inactive';
         profile.requestPending = false;
+        profile.approvedDeviceId = null;
+        profile.approvedDeviceBrand = null;
+        profile.approvedDeviceModel = null;
+        profile.expiresAt = null;
+        profile.lastApprovalTime = null;
         profile.updatedAt = new Date();
         console.log(`Deauthorized fallback UserProfile session ${id} remotely.`);
         return res.json({ success: true, message: 'User profile session terminated successfully.' });
@@ -342,14 +364,14 @@ app.delete('/api/devices/:id', async (req: Request, res: Response) => {
 // CRUD/API endpoints for User Profiles
 app.get('/api/user-profiles', async (req: Request, res: Response) => {
   try {
-    const thirtySecondsAgo = new Date(Date.now() - 30000);
+    const fiveMinutesAgo = new Date(Date.now() - 300000);
     if (isMongoConnected) {
       // Proactively clean up expired requests and expired sessions in DB
       const now = new Date();
       await UserProfile.updateMany(
         {
           status: 'pending_approval',
-          requestedAt: { $lt: thirtySecondsAgo }
+          requestedAt: { $lt: fiveMinutesAgo }
         },
         {
           status: 'inactive',
@@ -368,7 +390,7 @@ app.get('/api/user-profiles', async (req: Request, res: Response) => {
       fallbackUserProfiles.forEach((p) => {
         if (p.status === 'pending_approval' && p.requestedAt) {
           const requestedTime = new Date(p.requestedAt).getTime();
-          if (now - requestedTime > 30000) {
+          if (now - requestedTime > 300000) {
             p.status = 'inactive';
             p.requestPending = false;
             p.updatedAt = new Date();
@@ -379,6 +401,52 @@ app.get('/api/user-profiles', async (req: Request, res: Response) => {
     }
   } catch (err: any) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// Staff session verification endpoint
+app.post('/api/user-profiles/verify-session', async (req: Request, res: Response) => {
+  try {
+    const { androidId } = req.body;
+    if (!androidId) {
+      return res.status(400).json({ valid: false, message: 'Missing androidId' });
+    }
+
+    const now = new Date();
+
+    if (isMongoConnected) {
+      const profile = await UserProfile.findOne({
+        approvedDeviceId: androidId,
+        status: 'approved',
+        sessionActive: true,
+        expiresAt: { $gt: now },
+      });
+
+      if (profile) {
+        console.log(`[SESSION VERIFY] Valid session found for device ${androidId}, user: ${profile.name}`);
+        return res.json({ valid: true, profile });
+      }
+    } else {
+      const profile = fallbackUserProfiles.find(
+        (p) =>
+          p.approvedDeviceId === androidId &&
+          p.status === 'approved' &&
+          p.sessionActive &&
+          p.expiresAt &&
+          new Date(p.expiresAt).getTime() > now.getTime()
+      );
+
+      if (profile) {
+        console.log(`[SESSION VERIFY] Valid fallback session found for device ${androidId}, user: ${profile.name}`);
+        return res.json({ valid: true, profile });
+      }
+    }
+
+    console.log(`[SESSION VERIFY] No valid session for device ${androidId}`);
+    return res.json({ valid: false });
+  } catch (err: any) {
+    console.error('Error in /api/user-profiles/verify-session:', err);
+    return res.status(500).json({ valid: false, message: 'Server error' });
   }
 });
 
@@ -403,6 +471,12 @@ app.post('/api/user-profiles', async (req: Request, res: Response) => {
           deviceModel: deviceInfo?.deviceModel || '',
           platform: deviceInfo?.platform || '',
         },
+        approvedDeviceId: null,
+        approvedDeviceBrand: null,
+        approvedDeviceModel: null,
+        pendingDeviceId: null,
+        pendingDeviceBrand: null,
+        pendingDeviceModel: null,
         expiresAt: null,
       });
       const savedProfile = await newProfile.save();
@@ -422,6 +496,12 @@ app.post('/api/user-profiles', async (req: Request, res: Response) => {
           deviceModel: deviceInfo?.deviceModel || '',
           platform: deviceInfo?.platform || '',
         },
+        approvedDeviceId: null,
+        approvedDeviceBrand: null,
+        approvedDeviceModel: null,
+        pendingDeviceId: null,
+        pendingDeviceBrand: null,
+        pendingDeviceModel: null,
         expiresAt: null,
         createdAt: new Date(),
         updatedAt: new Date(),
@@ -437,7 +517,7 @@ app.post('/api/user-profiles', async (req: Request, res: Response) => {
 app.post('/api/user-profiles/:id/request-access', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { deviceInfo } = req.body;
+    const { deviceInfo, androidId, brand, model: deviceModel } = req.body;
 
     if (isMongoConnected) {
       const profile = await UserProfile.findById(id);
@@ -454,9 +534,12 @@ app.post('/api/user-profiles/:id/request-access', async (req: Request, res: Resp
           platform: deviceInfo.platform || '',
         };
       }
+      profile.pendingDeviceId = androidId || null;
+      profile.pendingDeviceBrand = brand || null;
+      profile.pendingDeviceModel = deviceModel || null;
       const updated = await profile.save();
 
-      // Set 30s timer to revert status to inactive
+      // Set 5min timer to revert status to inactive
       setTimeout(async () => {
         try {
           const currentProfile = await UserProfile.findById(id);
@@ -469,7 +552,7 @@ app.post('/api/user-profiles/:id/request-access', async (req: Request, res: Resp
         } catch (timeoutErr) {
           console.error('[ACCESS REQUEST EXPIRED TIMER ERROR] ', timeoutErr);
         }
-      }, 30000);
+      }, 300000);
 
       res.json(updated);
       broadcastProfilesUpdated();
@@ -488,9 +571,12 @@ app.post('/api/user-profiles/:id/request-access', async (req: Request, res: Resp
           platform: deviceInfo.platform || '',
         };
       }
+      profile.pendingDeviceId = androidId || null;
+      profile.pendingDeviceBrand = brand || null;
+      profile.pendingDeviceModel = deviceModel || null;
       profile.updatedAt = new Date();
 
-      // Set 30s timer to revert status to inactive
+      // Set 5min timer to revert status to inactive
       setTimeout(() => {
         if (profile.status === 'pending_approval') {
           profile.status = 'inactive';
@@ -498,7 +584,7 @@ app.post('/api/user-profiles/:id/request-access', async (req: Request, res: Resp
           profile.updatedAt = new Date();
           console.log(`[ACCESS REQUEST EXPIRED] Profile ${profile.name} (In-Memory) reverted to inactive.`);
         }
-      }, 30000);
+      }, 300000);
 
       res.json(profile);
       broadcastProfilesUpdated();
@@ -521,6 +607,12 @@ app.post('/api/user-profiles/:id/approve', async (req: Request, res: Response) =
       profile.requestPending = false;
       profile.lastApprovalTime = new Date();
       profile.approvedBy = 'Admin';
+      profile.approvedDeviceId = profile.pendingDeviceId;
+      profile.approvedDeviceBrand = profile.pendingDeviceBrand;
+      profile.approvedDeviceModel = profile.pendingDeviceModel;
+      profile.pendingDeviceId = null;
+      profile.pendingDeviceBrand = null;
+      profile.pendingDeviceModel = null;
 
       // Expiry Logic: 8 PM IST or 10 mins
       const now = new Date();
@@ -528,10 +620,10 @@ app.post('/api/user-profiles/:id/approve', async (req: Request, res: Response) =
       const istTime = new Date(now.getTime() + istOffsetMs);
       let expiresAt: Date;
 
-      if (istTime.getUTCHours() < 20) {
-        const ist8PM = new Date(istTime);
-        ist8PM.setUTCHours(20, 0, 0, 0);
-        expiresAt = new Date(ist8PM.getTime() - istOffsetMs);
+      if (istTime.getUTCHours() < 21) {
+        const ist9PM = new Date(istTime);
+        ist9PM.setUTCHours(21, 0, 0, 0);
+        expiresAt = new Date(ist9PM.getTime() - istOffsetMs);
       } else {
         expiresAt = new Date(now.getTime() + 10 * 60 * 1000);
       }
@@ -551,16 +643,22 @@ app.post('/api/user-profiles/:id/approve', async (req: Request, res: Response) =
       profile.requestPending = false;
       profile.lastApprovalTime = new Date();
       profile.approvedBy = 'Admin';
+      profile.approvedDeviceId = profile.pendingDeviceId;
+      profile.approvedDeviceBrand = profile.pendingDeviceBrand;
+      profile.approvedDeviceModel = profile.pendingDeviceModel;
+      profile.pendingDeviceId = null;
+      profile.pendingDeviceBrand = null;
+      profile.pendingDeviceModel = null;
 
       const now = new Date();
       const istOffsetMs = 5.5 * 60 * 60 * 1000;
       const istTime = new Date(now.getTime() + istOffsetMs);
       let expiresAt: Date;
 
-      if (istTime.getUTCHours() < 20) {
-        const ist8PM = new Date(istTime);
-        ist8PM.setUTCHours(20, 0, 0, 0);
-        expiresAt = new Date(ist8PM.getTime() - istOffsetMs);
+      if (istTime.getUTCHours() < 21) {
+        const ist9PM = new Date(istTime);
+        ist9PM.setUTCHours(21, 0, 0, 0);
+        expiresAt = new Date(ist9PM.getTime() - istOffsetMs);
       } else {
         expiresAt = new Date(now.getTime() + 10 * 60 * 1000);
       }
@@ -588,6 +686,9 @@ app.post('/api/user-profiles/:id/decline', async (req: Request, res: Response) =
       profile.sessionActive = false;
       profile.requestPending = false;
       profile.requestedAt = null;
+      profile.pendingDeviceId = null;
+      profile.pendingDeviceBrand = null;
+      profile.pendingDeviceModel = null;
       const updated = await profile.save();
       console.log(`[ACCESS REQUEST DECLINED] Profile ${profile.name} (DB) declined by Admin.`);
       res.json(updated);
@@ -601,6 +702,9 @@ app.post('/api/user-profiles/:id/decline', async (req: Request, res: Response) =
       profile.sessionActive = false;
       profile.requestPending = false;
       profile.requestedAt = null;
+      profile.pendingDeviceId = null;
+      profile.pendingDeviceBrand = null;
+      profile.pendingDeviceModel = null;
       profile.updatedAt = new Date();
       console.log(`[ACCESS REQUEST DECLINED] Profile ${profile.name} (In-Memory) declined by Admin.`);
       res.json(profile);
@@ -806,6 +910,10 @@ async function authenticate(req: Request, res: Response, next: NextFunction) {
       if (isMongoConnected) {
         const profile = await UserProfile.findById(staffId);
         if (profile && profile.sessionActive && profile.status === 'approved') {
+          // Validate device matches approved device
+          if (profile.approvedDeviceId && androidId && profile.approvedDeviceId.toLowerCase() !== androidId.toLowerCase()) {
+            return res.status(401).json({ error: 'Unauthorized: Device mismatch. This session is bound to a different device.' });
+          }
           req.body.callerRole = 'staff';
           return next();
         }
@@ -814,6 +922,10 @@ async function authenticate(req: Request, res: Response, next: NextFunction) {
           (p) => p._id === staffId && p.sessionActive && p.status === 'approved'
         );
         if (profile) {
+          // Validate device matches approved device
+          if (profile.approvedDeviceId && androidId && profile.approvedDeviceId.toLowerCase() !== androidId.toLowerCase()) {
+            return res.status(401).json({ error: 'Unauthorized: Device mismatch. This session is bound to a different device.' });
+          }
           req.body.callerRole = 'staff';
           return next();
         }
@@ -986,21 +1098,35 @@ setInterval(async () => {
         profile.status = 'inactive';
         profile.sessionActive = false;
         profile.expiresAt = null;
+        profile.approvedDeviceId = null;
+        profile.approvedDeviceBrand = null;
+        profile.approvedDeviceModel = null;
         await profile.save();
         console.log(`[CRON] DB Profile ${profile.name} automatically logged out due to expiry.`);
+      }
+      if (expiredProfiles.length > 0) {
+        broadcastProfilesUpdated();
       }
     } catch (err) {
       console.error('Error running cron job:', err);
     }
   } else {
+    let hadExpired = false;
     fallbackUserProfiles.forEach(profile => {
       if (profile.status === 'approved' && profile.expiresAt && profile.expiresAt <= now) {
         profile.status = 'inactive';
         profile.sessionActive = false;
         profile.expiresAt = null;
+        profile.approvedDeviceId = null;
+        profile.approvedDeviceBrand = null;
+        profile.approvedDeviceModel = null;
         console.log(`[CRON] In-Memory Profile ${profile.name} automatically logged out due to expiry.`);
+        hadExpired = true;
       }
     });
+    if (hadExpired) {
+      broadcastProfilesUpdated();
+    }
   }
 }, 60 * 1000);
 

@@ -5,6 +5,7 @@ import 'package:swastik_mobile_app/core/utils/constants.dart';
 import 'package:swastik_mobile_app/core/utils/time_utils.dart';
 
 import 'package:swastik_mobile_app/core/models/daily_closing_balance_model.dart';
+import 'package:swastik_mobile_app/features/auth/providers/auth_providers.dart';
 
 final transactionServiceProvider = Provider<TransactionService>((ref) => TransactionService(ref));
 
@@ -84,6 +85,7 @@ class TransactionNotifier extends Notifier<TransactionState> {
         notes: notes,
         date: date,
         createdAt: now,
+        createdBy: ref.read(currentUserProfileProvider)?.name ?? 'Admin',
       );
 
       await _transactionService.createTransaction(transaction);
@@ -101,7 +103,27 @@ class TransactionNotifier extends Notifier<TransactionState> {
   }) async {
     state = state.copyWith(isLoading: true, clearError: true);
     try {
-      await _transactionService.updateTransaction(oldTx, newTx);
+      final updatedTx = newTx;
+      final finalTx = TransactionModel(
+        id: updatedTx.id,
+        partyId: updatedTx.partyId,
+        partyName: updatedTx.partyName,
+        partyPhone: updatedTx.partyPhone,
+        type: updatedTx.type,
+        paymentMode: updatedTx.paymentMode,
+        cashAmount: updatedTx.cashAmount,
+        metalType: updatedTx.metalType,
+        metalWeight: updatedTx.metalWeight,
+        metalPurity: updatedTx.metalPurity,
+        notes: updatedTx.notes,
+        date: updatedTx.date,
+        createdAt: updatedTx.createdAt,
+        createdBy: updatedTx.createdBy,
+        updatedBy: ref.read(currentUserProfileProvider)?.name ?? 'Admin',
+        updatedAt: TimeUtils.now,
+      );
+
+      await _transactionService.updateTransaction(oldTx, finalTx);
       state = state.copyWith(isLoading: false, isSuccess: true);
       return true;
     } catch (e) {

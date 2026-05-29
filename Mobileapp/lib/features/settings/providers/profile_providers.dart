@@ -29,12 +29,11 @@ class ProfileState {
 class ProfileNotifier extends Notifier<ProfileState> {
   ProfileNotifier(this.arg);
   final String? arg;
-  late final String _storagePrefix;
+  
+  String get _storagePrefix => arg == null ? 'admin' : 'staff_$arg';
 
   @override
   ProfileState build() {
-    _storagePrefix = arg == null ? 'admin' : 'staff_$arg';
-
     // Try to get default name for Staff
     String defaultName = 'Admin';
     if (arg != null) {

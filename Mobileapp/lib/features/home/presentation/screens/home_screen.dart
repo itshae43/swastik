@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -22,6 +23,7 @@ import 'package:swastik_mobile_app/features/reminders/providers/reminder_provide
 import 'package:swastik_mobile_app/features/reminders/providers/appointment_providers.dart';
 import 'package:swastik_mobile_app/features/reminders/providers/reminder_navigation_provider.dart';
 import 'package:swastik_mobile_app/features/navigation/presentation/providers/navigation_provider.dart';
+import 'package:swastik_mobile_app/features/parties/presentation/widgets/quick_party_info_sheet.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -35,7 +37,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
-  String _selectedTableFilter = 'All'; // Default is 'All'
+  String _selectedTableFilter = 'Today'; // Default is 'Today'
   CustomFilterResult? _customFilterResult;
 
   @override
@@ -1235,21 +1237,56 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                               flex: nameFlex,
                               child: Row(
                                 children: [
-                                  Container(
-                                    width: 34,
-                                    height: 34,
-                                    decoration: BoxDecoration(
-                                      color: avatarBgColor,
-                                      shape: BoxShape.circle,
-                                    ),
-                                    alignment: Alignment.center,
-                                    child: Text(
-                                      initial,
-                                      style: GoogleFonts.montserrat(
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w600,
-                                        height: 20 / 14,
-                                        color: Colors.white,
+                                  GestureDetector(
+                                    onTap: () {
+                                      final parties = ref.read(partiesStreamProvider).value ?? [];
+                                      final party = parties.firstWhere(
+                                        (p) => p.id == t.partyId,
+                                        orElse: () => PartyModel(
+                                          id: t.partyId,
+                                          name: t.partyName,
+                                          type: 'Customer',
+                                          phone: t.partyPhone,
+                                          email: '',
+                                          address: '',
+                                          cashBalance: 0,
+                                          goldBalanceGrams: 0,
+                                          silverBalanceGrams: 0,
+                                          diamondBalanceCarats: 0,
+                                          openingCashBalance: 0,
+                                          openingGoldBalanceGrams: 0,
+                                          openingDiamondBalanceCarats: 0,
+                                          createdAt: TimeUtils.now,
+                                          updatedAt: TimeUtils.now,
+                                        ),
+                                      );
+                                      
+                                      showModalBottomSheet(
+                                        context: context,
+                                        isScrollControlled: true,
+                                        backgroundColor: Colors.transparent,
+                                        builder: (context) => QuickPartyInfoSheet(
+                                          party: party,
+                                          transaction: t,
+                                        ),
+                                      );
+                                    },
+                                    child: Container(
+                                      width: 34,
+                                      height: 34,
+                                      decoration: BoxDecoration(
+                                        color: avatarBgColor,
+                                        shape: BoxShape.circle,
+                                      ),
+                                      alignment: Alignment.center,
+                                      child: Text(
+                                        initial,
+                                        style: GoogleFonts.montserrat(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w600,
+                                          height: 20 / 14,
+                                          color: Colors.white,
+                                        ),
                                       ),
                                     ),
                                   ),
@@ -2093,20 +2130,55 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                             padding: const EdgeInsets.all(16.0),
                             child: Row(
                               children: [
-                                Container(
-                                  width: 48,
-                                  height: 48,
-                                  decoration: const BoxDecoration(
-                                    color: Color(0xFFF0EBE1),
-                                    shape: BoxShape.circle,
-                                  ),
-                                  alignment: Alignment.center,
-                                  child: Text(
-                                    initial,
-                                    style: GoogleFonts.montserrat(
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.bold,
-                                      color: const Color(0xFF6B5800),
+                                GestureDetector(
+                                  onTap: () {
+                                    final parties = ref.read(partiesStreamProvider).value ?? [];
+                                    final party = parties.firstWhere(
+                                      (p) => p.id == activity.partyId,
+                                      orElse: () => PartyModel(
+                                        id: activity.partyId,
+                                        name: activity.partyName,
+                                        type: 'Customer',
+                                        phone: activity.partyPhone,
+                                        email: '',
+                                        address: '',
+                                        cashBalance: 0,
+                                        goldBalanceGrams: 0,
+                                        silverBalanceGrams: 0,
+                                        diamondBalanceCarats: 0,
+                                        openingCashBalance: 0,
+                                        openingGoldBalanceGrams: 0,
+                                        openingDiamondBalanceCarats: 0,
+                                        createdAt: TimeUtils.now,
+                                        updatedAt: TimeUtils.now,
+                                      ),
+                                    );
+                                    
+                                    showModalBottomSheet(
+                                      context: context,
+                                      isScrollControlled: true,
+                                      backgroundColor: Colors.transparent,
+                                      builder: (context) => QuickPartyInfoSheet(
+                                        party: party,
+                                        transaction: activity,
+                                      ),
+                                    );
+                                  },
+                                  child: Container(
+                                    width: 48,
+                                    height: 48,
+                                    decoration: const BoxDecoration(
+                                      color: Color(0xFFF0EBE1),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    alignment: Alignment.center,
+                                    child: Text(
+                                      initial,
+                                      style: GoogleFonts.montserrat(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.bold,
+                                        color: const Color(0xFF6B5800),
+                                      ),
                                     ),
                                   ),
                                 ),
@@ -3368,6 +3440,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     const SizedBox(height: 8),
                     TextField(
                       controller: notesController,
+                      textCapitalization: TextCapitalization.characters,
                       maxLines: 3,
                       style: GoogleFonts.montserrat(
                         fontSize: 13,
@@ -4279,6 +4352,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       const SizedBox(height: 8),
                       TextField(
                         controller: notesController,
+                        textCapitalization: TextCapitalization.characters,
                         maxLines: 3,
                         style: GoogleFonts.montserrat(fontSize: 14),
                         decoration: InputDecoration(
@@ -5400,6 +5474,8 @@ class _TabletQuickAddEntryDialogState
   String _paymentMode = 'Cash'; // Cash, UPI, RTGS
   DateTime _selectedDate = TimeUtils.now;
   TimeOfDay _selectedTime = TimeOfDay.now();
+  Timer? _clockTimer;
+  bool _isTimeManuallySet = false;
 
   final TextEditingController _amountController = TextEditingController();
   final TextEditingController _partyController = TextEditingController();
@@ -5415,7 +5491,23 @@ class _TabletQuickAddEntryDialogState
   bool _isSaving = false;
 
   @override
+  void initState() {
+    super.initState();
+    _clockTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) {
+        setState(() {
+          _selectedTime = TimeOfDay.now();
+          if (!_isTimeManuallySet) {
+            _selectedDate = TimeUtils.now;
+          }
+        });
+      }
+    });
+  }
+
+  @override
   void dispose() {
+    _clockTimer?.cancel();
     _amountController.dispose();
     _partyController.dispose();
     _notesController.dispose();
@@ -5430,6 +5522,7 @@ class _TabletQuickAddEntryDialogState
   @override
   Widget build(BuildContext context) {
     final parties = ref.watch(partiesStreamProvider).value ?? [];
+    final isStaff = ref.watch(isStaffProvider);
 
     if (_pendingPartyId != null && parties.isNotEmpty) {
       try {
@@ -5499,7 +5592,8 @@ class _TabletQuickAddEntryDialogState
                     _buildDateTimePicker(
                       icon: Icons.calendar_today_outlined,
                       text: DateFormat('dd MMM yyyy').format(_selectedDate),
-                      onTap: () async {
+                      showArrow: true,
+                      onTap: isStaff ? null : () async {
                         final DateTime? picked = await showDatePicker(
                           context: context,
                           initialDate: _selectedDate,
@@ -5507,7 +5601,10 @@ class _TabletQuickAddEntryDialogState
                           lastDate: DateTime(2100),
                         );
                         if (picked != null) {
-                          setState(() => _selectedDate = picked);
+                          setState(() {
+                            _selectedDate = picked;
+                            _isTimeManuallySet = true;
+                          });
                         }
                       },
                     ),
@@ -5515,15 +5612,7 @@ class _TabletQuickAddEntryDialogState
                     _buildDateTimePicker(
                       icon: Icons.access_time_outlined,
                       text: _selectedTime.format(context),
-                      onTap: () async {
-                        final TimeOfDay? picked = await showTimePicker(
-                          context: context,
-                          initialTime: _selectedTime,
-                        );
-                        if (picked != null) {
-                          setState(() => _selectedTime = picked);
-                        }
-                      },
+                      onTap: null,
                     ),
                   ],
                 ),
@@ -6061,6 +6150,7 @@ class _TabletQuickAddEntryDialogState
             const SizedBox(height: 8),
             TextField(
               controller: _notesController,
+              textCapitalization: TextCapitalization.characters,
               maxLines: 2,
               style: GoogleFonts.montserrat(fontSize: 14),
               decoration: InputDecoration(
@@ -6161,41 +6251,52 @@ class _TabletQuickAddEntryDialogState
   Widget _buildDateTimePicker({
     required IconData icon,
     required String text,
-    required VoidCallback onTap,
+    VoidCallback? onTap,
+    bool showArrow = false,
   }) {
+    final content = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: onTap != null ? Colors.white : Colors.grey[100],
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE5DEC9)),
+        boxShadow: onTap != null ? [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.02),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ] : [],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: const Color(0xFF5E543F)),
+          const SizedBox(width: 6),
+          Text(
+            text,
+            style: GoogleFonts.montserrat(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: const Color(0xFF5E543F),
+            ),
+          ),
+          if (showArrow && onTap != null) ...[
+            const SizedBox(width: 4),
+            const Icon(Icons.arrow_drop_down, size: 16, color: Color(0xFF5E543F)),
+          ],
+        ],
+      ),
+    );
+
+    if (onTap == null) {
+      return content;
+    }
+
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(12),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: const Color(0xFFE5DEC9)),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.02),
-              blurRadius: 4,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 14, color: const Color(0xFF5E543F)),
-            const SizedBox(width: 6),
-            Text(
-              text,
-              style: GoogleFonts.montserrat(
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                color: const Color(0xFF5E543F),
-              ),
-            ),
-          ],
-        ),
-      ),
+      child: content,
     );
   }
 

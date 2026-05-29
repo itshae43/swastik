@@ -234,12 +234,12 @@ class ApiService {
   /// POST /api/user-profiles/:id/request-access — send access request.
   Future<Map<String, dynamic>> requestProfileAccess(
     String id,
-    Map<String, dynamic> deviceInfo,
+    Map<String, dynamic> requestBody,
   ) async {
     final res = await http.post(
       Uri.parse('$_base/api/user-profiles/$id/request-access'),
       headers: _getHeaders(),
-      body: jsonEncode({'deviceInfo': deviceInfo}),
+      body: jsonEncode(requestBody),
     );
     _assertOk(res);
     return jsonDecode(res.body) as Map<String, dynamic>;
@@ -260,6 +260,17 @@ class ApiService {
     final res = await http.post(
       Uri.parse('$_base/api/user-profiles/$id/decline'),
       headers: _getHeaders(),
+    );
+    _assertOk(res);
+    return jsonDecode(res.body) as Map<String, dynamic>;
+  }
+
+  /// POST /api/user-profiles/verify-session — verify saved staff session
+  Future<Map<String, dynamic>> verifyStaffSession(String androidId) async {
+    final res = await http.post(
+      Uri.parse('$_base/api/user-profiles/verify-session'),
+      headers: _getHeaders(),
+      body: jsonEncode({'androidId': androidId}),
     );
     _assertOk(res);
     return jsonDecode(res.body) as Map<String, dynamic>;

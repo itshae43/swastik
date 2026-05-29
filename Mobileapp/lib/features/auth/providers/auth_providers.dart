@@ -4,11 +4,13 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:swastik_mobile_app/core/utils/time_utils.dart';
 import 'package:swastik_mobile_app/core/services/auth_service.dart';
 import 'package:swastik_mobile_app/features/auth/models/user_profile.dart';
 import 'package:swastik_mobile_app/features/auth/providers/user_profiles_provider.dart';
 import 'package:swastik_mobile_app/constants/api_config.dart';
+import 'package:swastik_mobile_app/core/utils/device_identity.dart';
 
 final authServiceProvider = Provider<AuthService>((ref) => AuthService());
 
@@ -57,6 +59,33 @@ class AuthNotifier extends Notifier<AuthStatus> {
         debugPrint('[AuthNotifier] Server time sync failed, falling back to local device clock: $e');
       }
 
+      // Step 1: Check for saved staff session
+      final prefs = await SharedPreferences.getInstance();
+      final savedProfileId = prefs.getString('staff_session_profile_id');
+      final savedAndroidId = prefs.getString('staff_session_android_id');
+      
+      if (savedProfileId != null && savedAndroidId != null && savedAndroidId == DeviceIdentity.androidId) {
+        debugPrint('[AuthNotifier] Found saved staff session for profile $savedProfileId. Verifying...');
+        try {
+          final sessionData = await authService.verifyStaffSession(DeviceIdentity.androidId);
+          if (sessionData != null && sessionData['profile'] != null) {
+            final profile = UserProfileModel.fromJson(
+              Map<String, dynamic>.from(sessionData['profile']),
+            );
+            debugPrint('[AuthNotifier] Staff session restored for ${profile.name}');
+            loginAsStaff(profile);
+            return;
+          } else {
+            debugPrint('[AuthNotifier] Saved staff session is no longer valid. Clearing...');
+            await _clearSavedSession();
+          }
+        } catch (e) {
+          debugPrint('[AuthNotifier] Error verifying saved session: $e');
+          await _clearSavedSession();
+        }
+      }
+
+      // Step 2: Try admin device verification
       final isVerified = await authService.verifyDevice();
       state = isVerified ? AuthStatus.verified : AuthStatus.unverified;
       debugPrint('[AuthNotifier] Verification result: $state');
@@ -97,6 +126,9 @@ class AuthNotifier extends Notifier<AuthStatus> {
     ref.read(currentUserProfileProvider.notifier).setProfile(profile);
     state = AuthStatus.verified;
     _localLastApprovalTime = profile.lastApprovalTime;
+
+    // Save session to SharedPreferences for persistence across app restarts
+    _saveSession(profile);
 
     _logoutTimer?.cancel();
     _pollingTimer?.cancel();
@@ -176,7 +208,34 @@ class AuthNotifier extends Notifier<AuthStatus> {
     _pollingTimer?.cancel();
     _sseClient?.close();
     ref.read(currentUserProfileProvider.notifier).setProfile(null);
+    _clearSavedSession();
     state = AuthStatus.unverified;
+  }
+
+  Future<void> _saveSession(UserProfileModel profile) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('staff_session_profile_id', profile.id);
+      await prefs.setString('staff_session_android_id', DeviceIdentity.androidId);
+      if (profile.lastApprovalTime != null) {
+        await prefs.setString('staff_session_last_approval', profile.lastApprovalTime!.toIso8601String());
+      }
+      debugPrint('[AuthNotifier] Staff session saved to SharedPreferences');
+    } catch (e) {
+      debugPrint('[AuthNotifier] Error saving session: $e');
+    }
+  }
+
+  Future<void> _clearSavedSession() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('staff_session_profile_id');
+      await prefs.remove('staff_session_android_id');
+      await prefs.remove('staff_session_last_approval');
+      debugPrint('[AuthNotifier] Saved staff session cleared');
+    } catch (e) {
+      debugPrint('[AuthNotifier] Error clearing session: $e');
+    }
   }
 }
 

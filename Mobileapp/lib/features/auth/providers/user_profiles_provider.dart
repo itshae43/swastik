@@ -3,6 +3,7 @@ import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:swastik_mobile_app/features/auth/models/user_profile.dart';
+import 'package:swastik_mobile_app/core/utils/device_identity.dart';
 import 'package:swastik_mobile_app/services/api_service.dart';
 
 final apiServiceProvider = Provider<ApiService>((ref) => ApiService(ref));
@@ -124,8 +125,15 @@ class UserProfilesNotifier extends Notifier<UserProfilesState> {
         'platform': platform,
       };
 
+      final requestBody = {
+        'deviceInfo': deviceInfo,
+        'androidId': DeviceIdentity.androidId,
+        'brand': DeviceIdentity.brand,
+        'model': model,
+      };
+
       final apiService = ref.read(apiServiceProvider);
-      final response = await apiService.requestProfileAccess(id, deviceInfo);
+      final response = await apiService.requestProfileAccess(id, requestBody);
       final updatedProfile = UserProfileModel.fromJson(response);
 
       // Update state with the updated profile

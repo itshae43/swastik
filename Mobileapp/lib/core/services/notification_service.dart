@@ -8,6 +8,7 @@ import 'package:intl/intl.dart';
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/appointment_model.dart';
 import '../models/reminder_model.dart';
 import '../utils/time_utils.dart';
@@ -150,8 +151,14 @@ class NotificationService {
     List<ReminderModel> reminders, {
     bool force = false,
   }) async {
-    final futureReminders = reminders.where(_shouldScheduleReminder).toList()
-      ..sort((a, b) => a.id.compareTo(b.id));
+    final prefs = await SharedPreferences.getInstance();
+    final isNotificationsEnabled = prefs.getBool('notifications_enabled') ?? true;
+    final isRemindersEnabled = prefs.getBool('reminders_enabled') ?? true;
+
+    final futureReminders = (isNotificationsEnabled && isRemindersEnabled)
+        ? (reminders.where(_shouldScheduleReminder).toList()
+          ..sort((a, b) => a.id.compareTo(b.id)))
+        : <ReminderModel>[];
     final signature = _buildReminderSignature(futureReminders);
 
     if (!force && signature == _lastReminderSignature) return;
@@ -169,9 +176,14 @@ class NotificationService {
     List<AppointmentModel> appointments, {
     bool force = false,
   }) async {
-    final futureAppointments =
-        appointments.where(_shouldScheduleAppointment).toList()
-          ..sort((a, b) => a.id.compareTo(b.id));
+    final prefs = await SharedPreferences.getInstance();
+    final isNotificationsEnabled = prefs.getBool('notifications_enabled') ?? true;
+    final isAppointmentsEnabled = prefs.getBool('appointments_enabled') ?? true;
+
+    final futureAppointments = (isNotificationsEnabled && isAppointmentsEnabled)
+        ? (appointments.where(_shouldScheduleAppointment).toList()
+          ..sort((a, b) => a.id.compareTo(b.id)))
+        : <AppointmentModel>[];
     final signature = _buildAppointmentSignature(futureAppointments);
 
     if (!force && signature == _lastAppointmentSignature) return;
@@ -186,6 +198,11 @@ class NotificationService {
   }
 
   Future<void> scheduleReminderNotification(ReminderModel reminder) async {
+    final prefs = await SharedPreferences.getInstance();
+    final isNotificationsEnabled = prefs.getBool('notifications_enabled') ?? true;
+    final isRemindersEnabled = prefs.getBool('reminders_enabled') ?? true;
+    if (!isNotificationsEnabled || !isRemindersEnabled) return;
+
     if (!_shouldScheduleReminder(reminder)) return;
     final scheduleMode = await _resolveAndroidScheduleMode();
     await _scheduleReminderNotification(reminder, scheduleMode);
@@ -201,6 +218,11 @@ class NotificationService {
   Future<void> scheduleAppointmentNotification(
     AppointmentModel appointment,
   ) async {
+    final prefs = await SharedPreferences.getInstance();
+    final isNotificationsEnabled = prefs.getBool('notifications_enabled') ?? true;
+    final isAppointmentsEnabled = prefs.getBool('appointments_enabled') ?? true;
+    if (!isNotificationsEnabled || !isAppointmentsEnabled) return;
+
     if (!_shouldScheduleAppointment(appointment)) return;
     final scheduleMode = await _resolveAndroidScheduleMode();
     await _scheduleAppointmentNotification(appointment, scheduleMode);

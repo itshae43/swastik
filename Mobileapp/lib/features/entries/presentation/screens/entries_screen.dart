@@ -13,6 +13,7 @@ import 'package:swastik_mobile_app/features/navigation/presentation/providers/na
 import 'package:swastik_mobile_app/features/parties/providers/party_providers.dart';
 import 'package:swastik_mobile_app/features/ledger/providers/transaction_providers.dart';
 import 'package:swastik_mobile_app/features/parties/presentation/widgets/quick_add_party_bottom_sheet.dart';
+import 'package:swastik_mobile_app/features/auth/providers/auth_providers.dart';
 
 class EntriesScreen extends ConsumerStatefulWidget {
   const EntriesScreen({super.key});
@@ -40,6 +41,7 @@ class _EntriesScreenState extends ConsumerState<EntriesScreen> {
 
   Timer? _clockTimer;
   bool _isTimeManuallySet = false;
+  bool _isSaving = false;
 
   @override
   void initState() {
@@ -49,10 +51,12 @@ class _EntriesScreenState extends ConsumerState<EntriesScreen> {
 
     // Set up a 1-second periodic timer to tick the synced server clock live in the UI
     _clockTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (!_isTimeManuallySet && mounted) {
+      if (mounted) {
         setState(() {
           final now = TimeUtils.now;
-          _selectedDate = now;
+          if (!_isTimeManuallySet) {
+            _selectedDate = now;
+          }
           _selectedTime = TimeOfDay.fromDateTime(now);
         });
       }
@@ -92,6 +96,7 @@ class _EntriesScreenState extends ConsumerState<EntriesScreen> {
   @override
   Widget build(BuildContext context) {
     final isTablet = AppResponsive.isTablet(context);
+    final isStaff = ref.watch(isStaffProvider);
 
     // Listen to parties stream to auto-select pending party if it was added via Quick Add
     ref.listen<AsyncValue<List<PartyModel>>>(partiesStreamProvider, (
@@ -161,7 +166,8 @@ class _EntriesScreenState extends ConsumerState<EntriesScreen> {
                       _buildDateTimePicker(
                         icon: Icons.calendar_today_outlined,
                         text: DateFormat('dd MMM yyyy').format(_selectedDate),
-                        onTap: () async {
+                        showArrow: true,
+                        onTap: isStaff ? null : () async {
                           final DateTime? picked = await showDatePicker(
                             context: context,
                             initialDate: _selectedDate,
@@ -180,18 +186,7 @@ class _EntriesScreenState extends ConsumerState<EntriesScreen> {
                       _buildDateTimePicker(
                         icon: Icons.access_time_outlined,
                         text: _selectedTime.format(context),
-                        onTap: () async {
-                          final TimeOfDay? picked = await showTimePicker(
-                            context: context,
-                            initialTime: _selectedTime,
-                          );
-                          if (picked != null) {
-                            setState(() {
-                              _selectedTime = picked;
-                              _isTimeManuallySet = true;
-                            });
-                          }
-                        },
+                        onTap: null, // Time cannot be changed, must always be current time
                       ),
                     ],
                   ),
@@ -813,6 +808,7 @@ class _EntriesScreenState extends ConsumerState<EntriesScreen> {
               const SizedBox(height: 8),
               TextField(
                 controller: _notesController,
+                textCapitalization: TextCapitalization.characters,
                 maxLines: 3,
                 style: _textStyle(
                   context,
@@ -888,7 +884,7 @@ class _EntriesScreenState extends ConsumerState<EntriesScreen> {
                   const SizedBox(width: 16),
                   Expanded(
                     child: ElevatedButton(
-                      onPressed: () async {
+                      onPressed: _isSaving ? null : () async {
                         if (_selectedParty == null) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
@@ -898,109 +894,117 @@ class _EntriesScreenState extends ConsumerState<EntriesScreen> {
                           return;
                         }
 
-                        // Determine TransactionType
-                        TransactionType tType = TransactionType.sale; // default
-                        if (_transactionType == 'IN') {
-                          if (_category == 'Money')
-                            tType = TransactionType.receipt;
-                          else
-                            tType = TransactionType.metalIn;
-                        } else {
-                          if (_category == 'Money')
-                            tType = TransactionType.payment;
-                          else
-                            tType = TransactionType.metalOut;
-                        }
+                        setState(() { _isSaving = true; });
 
-                        // Determine PaymentMode
-                        PaymentMode pMode = PaymentMode.cash;
-                        if (_category == 'Money') {
-                          if (_paymentMode == 'Cash')
-                            pMode = PaymentMode.cash;
-                          else if (_paymentMode == 'UPI')
-                            pMode = PaymentMode.upi;
-                          else if (_paymentMode == 'RTGS')
-                            pMode = PaymentMode.rtgs;
-                          else
-                            pMode = PaymentMode.online;
-                        } else {
-                          pMode = PaymentMode.metal;
-                        }
+                        try {
+                          // Determine TransactionType
+                          TransactionType tType = TransactionType.sale; // default
+                          if (_transactionType == 'IN') {
+                            if (_category == 'Money')
+                              tType = TransactionType.receipt;
+                            else
+                              tType = TransactionType.metalIn;
+                          } else {
+                            if (_category == 'Money')
+                              tType = TransactionType.payment;
+                            else
+                              tType = TransactionType.metalOut;
+                          }
 
-                        // Parse values
-                        double cashAmt =
-                            double.tryParse(
-                              _amountController.text.replaceAll(',', ''),
-                            ) ??
-                            0.0;
-                        double metalWt = 0.0;
-                        if (_category == 'Gold')
-                          metalWt =
-                              double.tryParse(_weightController.text) ?? 0.0;
-                        if (_category == 'Diamond')
-                          metalWt =
-                              double.tryParse(_caratController.text) ?? 0.0;
+                          // Determine PaymentMode
+                          PaymentMode pMode = PaymentMode.cash;
+                          if (_category == 'Money') {
+                            if (_paymentMode == 'Cash')
+                              pMode = PaymentMode.cash;
+                            else if (_paymentMode == 'UPI')
+                              pMode = PaymentMode.upi;
+                            else if (_paymentMode == 'RTGS')
+                              pMode = PaymentMode.rtgs;
+                            else
+                              pMode = PaymentMode.online;
+                          } else {
+                            pMode = PaymentMode.metal;
+                          }
 
-                        String metalP = '';
-                        if (_category == 'Gold')
-                          metalP = _purityController.text;
-                        if (_category == 'Diamond')
-                          metalP = '${_piecesController.text} p';
+                          // Parse values
+                          double cashAmt =
+                              double.tryParse(
+                                _amountController.text.replaceAll(',', ''),
+                              ) ??
+                              0.0;
+                          double metalWt = 0.0;
+                          if (_category == 'Gold')
+                            metalWt =
+                                double.tryParse(_weightController.text) ?? 0.0;
+                          if (_category == 'Diamond')
+                            metalWt =
+                                double.tryParse(_caratController.text) ?? 0.0;
 
-                        final date = DateTime(
-                          _selectedDate.year,
-                          _selectedDate.month,
-                          _selectedDate.day,
-                          _selectedTime.hour,
-                          _selectedTime.minute,
-                        );
+                          String metalP = '';
+                          if (_category == 'Gold')
+                            metalP = _purityController.text;
+                          if (_category == 'Diamond')
+                            metalP = '${_piecesController.text} p';
 
-                        final success = await ref
-                            .read(transactionNotifierProvider.notifier)
-                            .createTransaction(
-                              partyId: _selectedParty!.id,
-                              partyName: _selectedParty!.name,
-                              partyPhone: _selectedParty!.phone,
-                              type: tType,
-                              paymentMode: pMode,
-                              cashAmount: cashAmt,
-                              metalType: _category == 'Money'
-                                  ? ''
-                                  : _category.toLowerCase(),
-                              metalWeight: metalWt,
-                              metalPurity: metalP,
-                              notes: _notesController.text,
-                              date: date,
+                          final date = DateTime(
+                            _selectedDate.year,
+                            _selectedDate.month,
+                            _selectedDate.day,
+                            _selectedTime.hour,
+                            _selectedTime.minute,
+                          );
+
+                          final success = await ref
+                              .read(transactionNotifierProvider.notifier)
+                              .createTransaction(
+                                partyId: _selectedParty!.id,
+                                partyName: _selectedParty!.name,
+                                partyPhone: _selectedParty!.phone,
+                                type: tType,
+                                paymentMode: pMode,
+                                cashAmount: cashAmt,
+                                metalType: _category == 'Money'
+                                    ? ''
+                                    : _category.toLowerCase(),
+                                metalWeight: metalWt,
+                                metalPurity: metalP,
+                                notes: _notesController.text,
+                                date: date,
+                              );
+
+                          if (success && mounted) {
+                            // Switch to ledger screen on tablet, home screen on mobile
+                            ref.read(navigationProvider.notifier).setIndex(isTablet ? 2 : 0);
+
+                            // Reset fields
+                            _partyController.clear();
+                            _amountController.clear();
+                            _notesController.clear();
+                            _purityController.clear();
+                            _weightController.clear();
+                            _caratController.clear();
+                            _piecesController.clear();
+                            setState(() {
+                              _selectedParty = null;
+                              _isTimeManuallySet = false;
+                            });
+
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Entry saved successfully'),
+                              ),
                             );
-
-                        if (success && mounted) {
-                          // Switch to ledger screen on tablet, home screen on mobile
-                          ref.read(navigationProvider.notifier).setIndex(isTablet ? 2 : 0);
-
-                          // Reset fields
-                          _partyController.clear();
-                          _amountController.clear();
-                          _notesController.clear();
-                          _purityController.clear();
-                          _weightController.clear();
-                          _caratController.clear();
-                          _piecesController.clear();
-                          setState(() {
-                            _selectedParty = null;
-                            _isTimeManuallySet = false;
-                          });
-
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Entry saved successfully'),
-                            ),
-                          );
-                        } else if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Failed to save entry'),
-                            ),
-                          );
+                          } else if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Failed to save entry'),
+                              ),
+                            );
+                          }
+                        } finally {
+                          if (mounted) {
+                            setState(() { _isSaving = false; });
+                          }
                         }
                       },
                       style: ElevatedButton.styleFrom(
@@ -1013,28 +1017,37 @@ class _EntriesScreenState extends ConsumerState<EntriesScreen> {
                           borderRadius: BorderRadius.circular(24),
                         ),
                       ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.check,
-                            color: Colors.black87,
-                            size: isTablet ? 24 : 20,
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            'Save Entry',
-                            style: _textStyle(
-                              context,
-                              const TextStyle(
+                      child: _isSaving 
+                          ? SizedBox(
+                              width: isTablet ? 24 : 20,
+                              height: isTablet ? 24 : 20,
+                              child: const CircularProgressIndicator(
+                                strokeWidth: 2.5,
                                 color: Colors.black87,
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
                               ),
+                            )
+                          : Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  Icons.check,
+                                  color: Colors.black87,
+                                  size: isTablet ? 24 : 20,
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  'Save Entry',
+                                  style: _textStyle(
+                                    context,
+                                    const TextStyle(
+                                      color: Colors.black87,
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
-                          ),
-                        ],
-                      ),
                     ),
                   ),
                 ],
@@ -1392,48 +1405,59 @@ class _EntriesScreenState extends ConsumerState<EntriesScreen> {
   Widget _buildDateTimePicker({
     required IconData icon,
     required String text,
-    required VoidCallback onTap,
+    VoidCallback? onTap,
+    bool showArrow = false,
   }) {
     final isTablet = AppResponsive.isTablet(context);
+    final content = Container(
+      padding: EdgeInsets.symmetric(
+        horizontal: isTablet ? 14 : 10,
+        vertical: isTablet ? 10 : 6,
+      ),
+      decoration: BoxDecoration(
+        color: onTap != null ? Colors.white : Colors.grey.shade100,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.shade200),
+        boxShadow: onTap != null ? [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.02),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ] : [],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: isTablet ? 18 : 14, color: Colors.grey.shade800),
+          SizedBox(width: isTablet ? 8 : 6),
+          Text(
+            text,
+            style: _textStyle(
+              context,
+              TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: Colors.grey.shade800,
+              ),
+            ),
+          ),
+          if (showArrow && onTap != null) ...[
+            SizedBox(width: isTablet ? 4 : 2),
+            Icon(Icons.arrow_drop_down, size: isTablet ? 20 : 16, color: Colors.grey.shade800),
+          ],
+        ],
+      ),
+    );
+
+    if (onTap == null) {
+      return content;
+    }
+
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(12),
-      child: Container(
-        padding: EdgeInsets.symmetric(
-          horizontal: isTablet ? 14 : 10,
-          vertical: isTablet ? 10 : 6,
-        ),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.grey.shade200),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.02),
-              blurRadius: 4,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: isTablet ? 18 : 14, color: Colors.grey.shade800),
-            SizedBox(width: isTablet ? 8 : 6),
-            Text(
-              text,
-              style: _textStyle(
-                context,
-                TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.grey.shade800,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
+      child: content,
     );
   }
 }

@@ -1,46 +1,98 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:swastik_mobile_app/core/utils/responsive_utils.dart';
+import 'package:swastik_mobile_app/core/services/notification_service.dart';
 
 class NotificationsEnabledNotifier extends Notifier<bool> {
   @override
-  bool build() => true;
+  bool build() {
+    _loadFromPrefs();
+    return true;
+  }
 
-  set value(bool val) => state = val;
+  Future<void> _loadFromPrefs() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final saved = prefs.getBool('notifications_enabled');
+      if (saved != null) {
+        state = saved;
+      }
+    } catch (_) {}
+  }
+
+  Future<void> setValue(bool val) async {
+    state = val;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('notifications_enabled', val);
+      await NotificationService().repairSchedulesFromServer(force: true);
+    } catch (_) {}
+  }
 }
 final notificationsEnabledProvider = NotifierProvider<NotificationsEnabledNotifier, bool>(
   NotificationsEnabledNotifier.new,
 );
 
-class PaymentAlertsEnabledNotifier extends Notifier<bool> {
-  @override
-  bool build() => true;
-
-  set value(bool val) => state = val;
-}
-final paymentAlertsEnabledProvider = NotifierProvider<PaymentAlertsEnabledNotifier, bool>(
-  PaymentAlertsEnabledNotifier.new,
-);
-
 class DailyRemindersEnabledNotifier extends Notifier<bool> {
   @override
-  bool build() => true;
+  bool build() {
+    _loadFromPrefs();
+    return true;
+  }
 
-  set value(bool val) => state = val;
+  Future<void> _loadFromPrefs() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final saved = prefs.getBool('reminders_enabled');
+      if (saved != null) {
+        state = saved;
+      }
+    } catch (_) {}
+  }
+
+  Future<void> setValue(bool val) async {
+    state = val;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('reminders_enabled', val);
+      await NotificationService().repairSchedulesFromServer(force: true);
+    } catch (_) {}
+  }
 }
 final dailyRemindersEnabledProvider = NotifierProvider<DailyRemindersEnabledNotifier, bool>(
   DailyRemindersEnabledNotifier.new,
 );
 
-class SecurityAlertsEnabledNotifier extends Notifier<bool> {
+class AppointmentsEnabledNotifier extends Notifier<bool> {
   @override
-  bool build() => true;
+  bool build() {
+    _loadFromPrefs();
+    return true;
+  }
 
-  set value(bool val) => state = val;
+  Future<void> _loadFromPrefs() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final saved = prefs.getBool('appointments_enabled');
+      if (saved != null) {
+        state = saved;
+      }
+    } catch (_) {}
+  }
+
+  Future<void> setValue(bool val) async {
+    state = val;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('appointments_enabled', val);
+      await NotificationService().repairSchedulesFromServer(force: true);
+    } catch (_) {}
+  }
 }
-final securityAlertsEnabledProvider = NotifierProvider<SecurityAlertsEnabledNotifier, bool>(
-  SecurityAlertsEnabledNotifier.new,
+final appointmentsEnabledProvider = NotifierProvider<AppointmentsEnabledNotifier, bool>(
+  AppointmentsEnabledNotifier.new,
 );
 
 class NotificationSettingsScreen extends ConsumerWidget {
@@ -50,9 +102,8 @@ class NotificationSettingsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final isTablet = AppResponsive.isTablet(context);
     final isNotificationsEnabled = ref.watch(notificationsEnabledProvider);
-    final isPaymentAlertsEnabled = ref.watch(paymentAlertsEnabledProvider);
     final isDailyRemindersEnabled = ref.watch(dailyRemindersEnabledProvider);
-    final isSecurityAlertsEnabled = ref.watch(securityAlertsEnabledProvider);
+    final isAppointmentsEnabled = ref.watch(appointmentsEnabledProvider);
 
     final primaryGold = const Color(0xFF8A7311);
 
@@ -148,7 +199,7 @@ class NotificationSettingsScreen extends ConsumerWidget {
                       value: isNotificationsEnabled,
                       activeColor: primaryGold,
                       onChanged: (value) {
-                        ref.read(notificationsEnabledProvider.notifier).value = value;
+                        ref.read(notificationsEnabledProvider.notifier).setValue(value);
                       },
                     ),
                   ],
@@ -168,34 +219,23 @@ class NotificationSettingsScreen extends ConsumerWidget {
                 ),
                 const SizedBox(height: 12),
                 _buildToggleCard(
-                  title: 'Payment Alerts',
-                  subtitle: 'Get notified for payments and receipts',
-                  value: isPaymentAlertsEnabled,
-                  icon: Icons.payments_outlined,
-                  onChanged: (val) {
-                    ref.read(paymentAlertsEnabledProvider.notifier).value = val;
-                  },
-                  isTablet: isTablet,
-                  primaryGold: primaryGold,
-                ),
-                _buildToggleCard(
                   title: 'Reminders',
                   subtitle: 'Daily updates and collection alerts',
                   value: isDailyRemindersEnabled,
                   icon: Icons.notifications_none_outlined,
                   onChanged: (val) {
-                    ref.read(dailyRemindersEnabledProvider.notifier).value = val;
+                    ref.read(dailyRemindersEnabledProvider.notifier).setValue(val);
                   },
                   isTablet: isTablet,
                   primaryGold: primaryGold,
                 ),
                 _buildToggleCard(
-                  title: 'Security Alerts',
-                  subtitle: 'Device logins and verification notifications',
-                  value: isSecurityAlertsEnabled,
-                  icon: Icons.security_rounded,
+                  title: 'Appointments',
+                  subtitle: 'Upcoming sessions and schedule alerts',
+                  value: isAppointmentsEnabled,
+                  icon: Icons.calendar_today_outlined,
                   onChanged: (val) {
-                    ref.read(securityAlertsEnabledProvider.notifier).value = val;
+                    ref.read(appointmentsEnabledProvider.notifier).setValue(val);
                   },
                   isTablet: isTablet,
                   primaryGold: primaryGold,

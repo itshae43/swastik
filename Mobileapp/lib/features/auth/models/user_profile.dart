@@ -9,6 +9,9 @@ class UserProfileModel {
   final DateTime? lastApprovalTime;
   final String? approvedBy;
   final UserProfileDeviceInfo deviceInfo;
+  final String? approvedDeviceId;
+  final String? approvedDeviceBrand;
+  final String? approvedDeviceModel;
   final DateTime? expiresAt;
   final DateTime? createdAt;
   final DateTime? updatedAt;
@@ -24,6 +27,9 @@ class UserProfileModel {
     this.lastApprovalTime,
     this.approvedBy,
     required this.deviceInfo,
+    this.approvedDeviceId,
+    this.approvedDeviceBrand,
+    this.approvedDeviceModel,
     this.expiresAt,
     this.createdAt,
     this.updatedAt,
@@ -45,6 +51,9 @@ class UserProfileModel {
           : null,
       approvedBy: json['approvedBy'],
       deviceInfo: UserProfileDeviceInfo.fromJson(json['deviceInfo'] ?? {}),
+      approvedDeviceId: json['approvedDeviceId'],
+      approvedDeviceBrand: json['approvedDeviceBrand'],
+      approvedDeviceModel: json['approvedDeviceModel'],
       expiresAt: json['expiresAt'] != null
           ? DateTime.tryParse(json['expiresAt'].toString())
           : null,
@@ -69,6 +78,9 @@ class UserProfileModel {
       'lastApprovalTime': lastApprovalTime?.toIso8601String(),
       'approvedBy': approvedBy,
       'deviceInfo': deviceInfo.toJson(),
+      'approvedDeviceId': approvedDeviceId,
+      'approvedDeviceBrand': approvedDeviceBrand,
+      'approvedDeviceModel': approvedDeviceModel,
       'expiresAt': expiresAt?.toIso8601String(),
       'createdAt': createdAt?.toIso8601String(),
       'updatedAt': updatedAt?.toIso8601String(),
@@ -86,6 +98,9 @@ class UserProfileModel {
     DateTime? lastApprovalTime,
     String? approvedBy,
     UserProfileDeviceInfo? deviceInfo,
+    String? approvedDeviceId,
+    String? approvedDeviceBrand,
+    String? approvedDeviceModel,
     DateTime? expiresAt,
     DateTime? createdAt,
     DateTime? updatedAt,
@@ -101,6 +116,9 @@ class UserProfileModel {
       lastApprovalTime: lastApprovalTime ?? this.lastApprovalTime,
       approvedBy: approvedBy ?? this.approvedBy,
       deviceInfo: deviceInfo ?? this.deviceInfo,
+      approvedDeviceId: approvedDeviceId ?? this.approvedDeviceId,
+      approvedDeviceBrand: approvedDeviceBrand ?? this.approvedDeviceBrand,
+      approvedDeviceModel: approvedDeviceModel ?? this.approvedDeviceModel,
       expiresAt: expiresAt ?? this.expiresAt,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
