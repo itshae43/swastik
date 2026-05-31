@@ -55,6 +55,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     super.dispose();
   }
 
+  Future<void> _handleRefresh() async {
+    ref.invalidate(transactionsStreamProvider);
+    ref.invalidate(partiesStreamProvider);
+    ref.invalidate(dailyBalancesStreamProvider);
+    try {
+      await Future.wait([
+        ref.read(transactionsStreamProvider.future),
+        ref.read(partiesStreamProvider.future),
+      ]).timeout(const Duration(milliseconds: 800));
+    } catch (_) {
+      // Gracefully handle timeout or network error to ensure spinner always dismisses
+    }
+  }
+
   PopupMenuItem<String> _buildFilterMenuItem(
     String value,
     String label,
@@ -235,24 +249,31 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     return Container(
       color: const Color(0xFFFAF6EE),
       child: SafeArea(
-        child: SingleChildScrollView(
-          physics: const BouncingScrollPhysics(),
-          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildProfileHeader(),
-              const SizedBox(height: 24),
-              _buildBalancesGrid(
-                cash: displayCash,
-                online: displayOnline,
-                gold: displayGold,
-                diamond: displayDiamond,
-              ),
-              const SizedBox(height: 24),
-              _buildRecentTransactions(),
-              const SizedBox(height: 80), // Padding for bottom FAB
-            ],
+        child: RefreshIndicator(
+          onRefresh: _handleRefresh,
+          color: const Color(0xFFD4B13B),
+          backgroundColor: const Color(0xFFFAF6EE),
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(
+              parent: BouncingScrollPhysics(),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildProfileHeader(),
+                const SizedBox(height: 24),
+                _buildBalancesGrid(
+                  cash: displayCash,
+                  online: displayOnline,
+                  gold: displayGold,
+                  diamond: displayDiamond,
+                ),
+                const SizedBox(height: 24),
+                _buildRecentTransactions(),
+                const SizedBox(height: 80), // Padding for bottom FAB
+              ],
+            ),
           ),
         ),
       ),
@@ -282,123 +303,130 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       child: Container(
         color: const Color(0xFFFAF6EE), // Beautiful warm beige/cream background
         child: SafeArea(
-          child: SingleChildScrollView(
-            physics: const BouncingScrollPhysics(),
-            padding: const EdgeInsets.symmetric(
-              horizontal: 28.0,
-              vertical: 24.0,
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Header Section (Date and New Entry button)
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      dateStr,
-                      style: GoogleFonts.montserrat(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        color: const Color(
-                          0xFF735C0F,
-                        ), // Olive-gold text matching the screenshot
+          child: RefreshIndicator(
+            onRefresh: _handleRefresh,
+            color: const Color(0xFFD4B13B),
+            backgroundColor: const Color(0xFFFAF6EE),
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(
+                parent: BouncingScrollPhysics(),
+              ),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 28.0,
+                vertical: 24.0,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Header Section (Date and New Entry button)
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        dateStr,
+                        style: GoogleFonts.montserrat(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                          color: const Color(
+                            0xFF735C0F,
+                          ), // Olive-gold text matching the screenshot
+                        ),
                       ),
-                    ),
-                    Row(
-                      children: [
-                        ElevatedButton.icon(
-                          onPressed: () => _showSetAppointmentDialog(
-                            context,
-                            isTablet: true,
-                          ),
-                          icon: const Icon(
-                            Icons.calendar_today_outlined,
-                            color: Color(0xFF735C0F),
-                            size: 18,
-                          ),
-                          label: Text(
-                            'Set Appointment',
-                            style: GoogleFonts.montserrat(
-                              color: const Color(0xFF735C0F),
-                              fontWeight: FontWeight.bold,
-                              fontSize: 14,
+                      Row(
+                        children: [
+                          ElevatedButton.icon(
+                            onPressed: () => _showSetAppointmentDialog(
+                              context,
+                              isTablet: true,
                             ),
-                          ),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFFFAF6EE),
-                            elevation: 1,
-                            side: const BorderSide(
-                              color: Color(0xFFE5DEC9),
-                              width: 1.5,
+                            icon: const Icon(
+                              Icons.calendar_today_outlined,
+                              color: Color(0xFF735C0F),
+                              size: 18,
                             ),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 20,
-                              vertical: 14,
-                            ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(30),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        ElevatedButton.icon(
-                          onPressed: () {
-                            showDialog(
-                              context: context,
-                              barrierDismissible: true,
-                              builder: (context) => const Dialog(
-                                backgroundColor: Colors.transparent,
-                                child: TabletQuickAddEntryDialog(),
+                            label: Text(
+                              'Set Appointment',
+                              style: GoogleFonts.montserrat(
+                                color: const Color(0xFF735C0F),
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
                               ),
-                            );
-                          },
-                          icon: const Icon(
-                            Icons.add,
-                            color: Color(0xFF01565B),
-                            size: 18,
-                          ),
-                          label: Text(
-                            'New Entry',
-                            style: GoogleFonts.montserrat(
-                              color: const Color(0xFF01565B),
-                              fontWeight: FontWeight.bold,
-                              fontSize: 14,
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFFFAF6EE),
+                              elevation: 1,
+                              side: const BorderSide(
+                                color: Color(0xFFE5DEC9),
+                                width: 1.5,
+                              ),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 20,
+                                vertical: 14,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(30),
+                              ),
                             ),
                           ),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(
-                              0xFFDFBA6B,
-                            ), // Gold background
-                            elevation: 2,
-                            shadowColor: Colors.black.withOpacity(0.1),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 20,
-                              vertical: 14,
+                          const SizedBox(width: 12),
+                          ElevatedButton.icon(
+                            onPressed: () {
+                              showDialog(
+                                context: context,
+                                barrierDismissible: true,
+                                builder: (context) => const Dialog(
+                                  backgroundColor: Colors.transparent,
+                                  child: TabletQuickAddEntryDialog(),
+                                ),
+                              );
+                            },
+                            icon: const Icon(
+                              Icons.add,
+                              color: Color(0xFF01565B),
+                              size: 18,
                             ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(30),
+                            label: Text(
+                              'New Entry',
+                              style: GoogleFonts.montserrat(
+                                color: const Color(0xFF01565B),
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                              ),
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(
+                                0xFFDFBA6B,
+                              ), // Gold background
+                              elevation: 2,
+                              shadowColor: Colors.black.withOpacity(0.1),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 20,
+                                vertical: 14,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(30),
+                              ),
                             ),
                           ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 24),
-
-                // Summary Cards Grid (4 Cards Row)
-                _buildTabletSummaryCards(
-                  cash: cash,
-                  online: online,
-                  gold: gold,
-                  diamond: diamond,
-                ),
-                const SizedBox(height: 28),
-
-                // Recent Transactions Table inside a beautifully styled Card
-                _buildTabletTransactionsTable(transactionsAsync),
-              ],
+                        ],
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+  
+                  // Summary Cards Grid (4 Cards Row)
+                  _buildTabletSummaryCards(
+                    cash: cash,
+                    online: online,
+                    gold: gold,
+                    diamond: diamond,
+                  ),
+                  const SizedBox(height: 28),
+  
+                  // Recent Transactions Table inside a beautifully styled Card
+                  _buildTabletTransactionsTable(transactionsAsync),
+                ],
+              ),
             ),
           ),
         ),

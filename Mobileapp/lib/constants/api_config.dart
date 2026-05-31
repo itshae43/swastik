@@ -11,7 +11,7 @@ class ApiConfig {
   /// Base URL dynamically switching between local backend (in debug) and production.
   static String get baseUrl {
     if (kDebugMode) {
-      return 'https://reliability-denver-closing-designer.trycloudflare.com' ;
+      return 'https://racial-epinions-porcelain-chemistry.trycloudflare.com' ;
       }
     return 'https://appapi.swastikjewel.in';
   }
