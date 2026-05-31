@@ -94,7 +94,7 @@ class TransactionService {
       Uri.parse('$baseUrl/transactions'),
       headers: _getHeaders(),
       body: jsonEncode(transaction.toMap()),
-    ).timeout(const Duration(seconds: 30));
+    ).timeout(const Duration(seconds: 15));
 
     if (response.statusCode != 200 && response.statusCode != 201) {
       throw Exception('Failed to create transaction');

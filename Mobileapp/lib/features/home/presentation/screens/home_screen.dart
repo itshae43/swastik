@@ -6684,7 +6684,7 @@ class _TabletQuickAddEntryDialogState
       } else if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(const SnackBar(content: Text('Failed to save entry')));
+        ).showSnackBar(const SnackBar(content: Text('Save may have failed. Please check ledger before retrying.')));
       }
     } catch (_) {
       if (mounted) {

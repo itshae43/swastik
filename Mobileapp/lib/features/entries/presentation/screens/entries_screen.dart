@@ -997,7 +997,7 @@ class _EntriesScreenState extends ConsumerState<EntriesScreen> {
                           } else if (mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
-                                content: Text('Failed to save entry'),
+                                content: Text('Save may have failed. Please check ledger before retrying.'),
                               ),
                             );
                           }

@@ -17,6 +17,7 @@ class ApiService {
   ApiService([this._ref]);
 
   final String _base = ApiConfig.baseUrl;
+  static const _timeout = Duration(seconds: 15);
 
   Map<String, String> _getHeaders() {
     final headers = {
@@ -40,7 +41,7 @@ class ApiService {
 
   /// GET /api/health — check backend & database status.
   Future<Map<String, dynamic>> getHealth() async {
-    final res = await http.get(Uri.parse('$_base/api/health'));
+    final res = await http.get(Uri.parse('$_base/api/health')).timeout(_timeout);
     _assertOk(res);
     return jsonDecode(res.body) as Map<String, dynamic>;
   }
@@ -63,7 +64,7 @@ class ApiService {
         'brand': brand,
         'model': model,
       }),
-    );
+    ).timeout(_timeout);
     _assertOk(res);
     return jsonDecode(res.body) as Map<String, dynamic>;
   }
@@ -74,7 +75,7 @@ class ApiService {
 
   /// GET /api/parties — fetch all parties.
   Future<List<dynamic>> getParties() async {
-    final res = await http.get(Uri.parse('$_base/api/parties'), headers: _getHeaders());
+    final res = await http.get(Uri.parse('$_base/api/parties'), headers: _getHeaders()).timeout(_timeout);
     _assertOk(res);
     return jsonDecode(res.body) as List<dynamic>;
   }
@@ -85,7 +86,7 @@ class ApiService {
       Uri.parse('$_base/api/parties'),
       headers: _getHeaders(),
       body: jsonEncode(body),
-    );
+    ).timeout(_timeout);
     if (res.statusCode != 201 && res.statusCode != 200) {
       throw ApiException(res.statusCode, res.body);
     }
@@ -101,14 +102,14 @@ class ApiService {
       Uri.parse('$_base/api/parties/$id'),
       headers: _getHeaders(),
       body: jsonEncode(body),
-    );
+    ).timeout(_timeout);
     _assertOk(res);
     return jsonDecode(res.body) as Map<String, dynamic>;
   }
 
   /// DELETE /api/parties/:id — delete a party.
   Future<Map<String, dynamic>> deleteParty(String id) async {
-    final res = await http.delete(Uri.parse('$_base/api/parties/$id'), headers: _getHeaders());
+    final res = await http.delete(Uri.parse('$_base/api/parties/$id'), headers: _getHeaders()).timeout(_timeout);
     _assertOk(res);
     return jsonDecode(res.body) as Map<String, dynamic>;
   }
@@ -119,7 +120,7 @@ class ApiService {
 
   /// GET /api/transactions — fetch all transactions.
   Future<List<dynamic>> getTransactions() async {
-    final res = await http.get(Uri.parse('$_base/api/transactions'), headers: _getHeaders());
+    final res = await http.get(Uri.parse('$_base/api/transactions'), headers: _getHeaders()).timeout(_timeout);
     _assertOk(res);
     return jsonDecode(res.body) as List<dynamic>;
   }
@@ -132,7 +133,7 @@ class ApiService {
       Uri.parse('$_base/api/transactions'),
       headers: _getHeaders(),
       body: jsonEncode(body),
-    );
+    ).timeout(_timeout);
     if (res.statusCode != 201 && res.statusCode != 200) {
       throw ApiException(res.statusCode, res.body);
     }
@@ -148,14 +149,14 @@ class ApiService {
       Uri.parse('$_base/api/transactions/$id'),
       headers: _getHeaders(),
       body: jsonEncode(body),
-    );
+    ).timeout(_timeout);
     _assertOk(res);
     return jsonDecode(res.body) as Map<String, dynamic>;
   }
 
   /// DELETE /api/transactions/:id — delete a transaction.
   Future<Map<String, dynamic>> deleteTransaction(String id) async {
-    final res = await http.delete(Uri.parse('$_base/api/transactions/$id'), headers: _getHeaders());
+    final res = await http.delete(Uri.parse('$_base/api/transactions/$id'), headers: _getHeaders()).timeout(_timeout);
     _assertOk(res);
     return jsonDecode(res.body) as Map<String, dynamic>;
   }
@@ -166,7 +167,7 @@ class ApiService {
 
   /// GET /api/reminders — fetch all reminders.
   Future<List<dynamic>> getReminders() async {
-    final res = await http.get(Uri.parse('$_base/api/reminders'), headers: _getHeaders());
+    final res = await http.get(Uri.parse('$_base/api/reminders'), headers: _getHeaders()).timeout(_timeout);
     _assertOk(res);
     return jsonDecode(res.body) as List<dynamic>;
   }
@@ -179,7 +180,7 @@ class ApiService {
       Uri.parse('$_base/api/reminders'),
       headers: _getHeaders(),
       body: jsonEncode(body),
-    );
+    ).timeout(_timeout);
     if (res.statusCode != 201 && res.statusCode != 200) {
       throw ApiException(res.statusCode, res.body);
     }
@@ -195,14 +196,14 @@ class ApiService {
       Uri.parse('$_base/api/reminders/$id'),
       headers: _getHeaders(),
       body: jsonEncode(body),
-    );
+    ).timeout(_timeout);
     _assertOk(res);
     return jsonDecode(res.body) as Map<String, dynamic>;
   }
 
   /// DELETE /api/reminders/:id — delete a reminder.
   Future<Map<String, dynamic>> deleteReminder(String id) async {
-    final res = await http.delete(Uri.parse('$_base/api/reminders/$id'), headers: _getHeaders());
+    final res = await http.delete(Uri.parse('$_base/api/reminders/$id'), headers: _getHeaders()).timeout(_timeout);
     _assertOk(res);
     return jsonDecode(res.body) as Map<String, dynamic>;
   }
@@ -213,7 +214,7 @@ class ApiService {
 
   /// GET /api/user-profiles — fetch all user profiles.
   Future<List<dynamic>> getUserProfiles() async {
-    final res = await http.get(Uri.parse('$_base/api/user-profiles'), headers: _getHeaders());
+    final res = await http.get(Uri.parse('$_base/api/user-profiles'), headers: _getHeaders()).timeout(_timeout);
     _assertOk(res);
     return jsonDecode(res.body) as List<dynamic>;
   }
@@ -224,7 +225,7 @@ class ApiService {
       Uri.parse('$_base/api/user-profiles'),
       headers: _getHeaders(),
       body: jsonEncode(body),
-    );
+    ).timeout(_timeout);
     if (res.statusCode != 201 && res.statusCode != 200) {
       throw ApiException(res.statusCode, res.body);
     }
@@ -240,7 +241,7 @@ class ApiService {
       Uri.parse('$_base/api/user-profiles/$id/request-access'),
       headers: _getHeaders(),
       body: jsonEncode(requestBody),
-    );
+    ).timeout(_timeout);
     _assertOk(res);
     return jsonDecode(res.body) as Map<String, dynamic>;
   }
@@ -250,7 +251,7 @@ class ApiService {
     final res = await http.post(
       Uri.parse('$_base/api/user-profiles/$id/approve'),
       headers: _getHeaders(),
-    );
+    ).timeout(_timeout);
     _assertOk(res);
     return jsonDecode(res.body) as Map<String, dynamic>;
   }
@@ -260,7 +261,7 @@ class ApiService {
     final res = await http.post(
       Uri.parse('$_base/api/user-profiles/$id/decline'),
       headers: _getHeaders(),
-    );
+    ).timeout(_timeout);
     _assertOk(res);
     return jsonDecode(res.body) as Map<String, dynamic>;
   }
@@ -271,7 +272,7 @@ class ApiService {
       Uri.parse('$_base/api/user-profiles/verify-session'),
       headers: _getHeaders(),
       body: jsonEncode({'androidId': androidId}),
-    );
+    ).timeout(_timeout);
     _assertOk(res);
     return jsonDecode(res.body) as Map<String, dynamic>;
   }
@@ -282,7 +283,7 @@ class ApiService {
 
   /// GET /api/daily-balances — fetch all saved daily closing balances.
   Future<List<dynamic>> getDailyBalances() async {
-    final res = await http.get(Uri.parse('$_base/api/daily-balances'), headers: _getHeaders());
+    final res = await http.get(Uri.parse('$_base/api/daily-balances'), headers: _getHeaders()).timeout(_timeout);
     _assertOk(res);
     return jsonDecode(res.body) as List<dynamic>;
   }

@@ -729,55 +729,101 @@ function getISTDateString(date: Date): string {
   return `${yyyy}-${mm}-${dd}`;
 }
 
-// Recalculates closing balances and propagates them daily
-export async function recalculateDailyBalances(): Promise<void> {
+// Recalculates closing balances — incrementally when a fromDate is given,
+// or fully when called without arguments (e.g. from the GET endpoint).
+export async function recalculateDailyBalances(fromDate?: Date): Promise<void> {
   try {
     if (!isMongoConnected) {
       console.log('[DAILY BALANCE RECALCULATION] Skipping database recalculation (MongoDB not connected).');
       return;
     }
 
-    // 1. Get all transactions sorted by date ascending
-    const transactions = await Transaction.find().sort({ date: 1 });
-    if (transactions.length === 0) {
-      await DailyClosingBalance.deleteMany({});
-      return;
-    }
-
-    // 2. Clear all existing records for a fresh recalculation
-    await DailyClosingBalance.deleteMany({});
-
-    // 3. Keep running sum of balances
+    // 1. Determine the start date and seed balances
+    let startDateStr: string;
     let runningCash = 0;
     let runningOnline = 0;
     let runningGold = 0;
     let runningDiamond = 0;
 
-    // Group transactions by their local IST date
-    const txByDate: { [dateStr: string]: any[] } = {};
-    for (const tx of transactions) {
-      const dStr = getISTDateString(tx.date);
-      if (!txByDate[dStr]) {
-        txByDate[dStr] = [];
+    if (fromDate) {
+      // Incremental mode: start from the given date
+      startDateStr = getISTDateString(fromDate);
+
+      // Seed from the previous day's closing balance (if it exists)
+      const startIST = new Date(fromDate.getTime() + 5.5 * 60 * 60 * 1000);
+      startIST.setUTCHours(0, 0, 0, 0);
+      const prevDayIST = new Date(startIST.getTime() - 24 * 60 * 60 * 1000);
+      const prevDateStr = `${prevDayIST.getUTCFullYear()}-${String(prevDayIST.getUTCMonth() + 1).padStart(2, '0')}-${String(prevDayIST.getUTCDate()).padStart(2, '0')}`;
+
+      const prevBalance = await DailyClosingBalance.findOne({ date: prevDateStr });
+      if (prevBalance) {
+        runningCash = prevBalance.closingCash;
+        runningOnline = prevBalance.closingOnline;
+        runningGold = prevBalance.closingGold;
+        runningDiamond = prevBalance.closingDiamond;
+      } else {
+        // No previous balance — sum all transactions before this date
+        const txsBefore = await Transaction.find({ date: { $lt: fromDate } }).sort({ date: 1 });
+        for (const tx of txsBefore) {
+          const isCredit = tx.type === 'receipt' || tx.type === 'metalIn';
+          const isDebit = tx.type === 'payment' || tx.type === 'metalOut';
+          const val = tx.metalType ? tx.metalWeight : tx.cashAmount;
+
+          if (!tx.metalType) {
+            if (tx.paymentMode === 'cash') {
+              if (isCredit) runningCash += val;
+              if (isDebit) runningCash -= val;
+            } else if (tx.paymentMode === 'online' || tx.paymentMode === 'upi' || tx.paymentMode === 'rtgs') {
+              if (isCredit) runningOnline += val;
+              if (isDebit) runningOnline -= val;
+            }
+          } else if (tx.metalType === 'gold') {
+            if (isCredit) runningGold += val;
+            if (isDebit) runningGold -= val;
+          } else if (tx.metalType === 'diamond') {
+            if (isCredit) runningDiamond += val;
+            if (isDebit) runningDiamond -= val;
+          }
+        }
       }
+    } else {
+      // Full recalculation mode
+      const transactions = await Transaction.find().sort({ date: 1 });
+      if (transactions.length === 0) {
+        await DailyClosingBalance.deleteMany({});
+        return;
+      }
+      await DailyClosingBalance.deleteMany({});
+      startDateStr = getISTDateString(transactions[0].date);
+    }
+
+    // 2. Get all transactions from the start date onwards
+    const istOffset = 5.5 * 60 * 60 * 1000;
+    const [yyyy, mm, dd] = startDateStr.split('-').map(Number);
+    // Convert the IST start-of-day back to UTC for the query
+    const startUTC = new Date(Date.UTC(yyyy, mm - 1, dd) - istOffset);
+
+    const txsFromStart = await Transaction.find({ date: { $gte: startUTC } }).sort({ date: 1 });
+
+    // Group transactions by IST date
+    const txByDate: { [dateStr: string]: any[] } = {};
+    for (const tx of txsFromStart) {
+      const dStr = getISTDateString(tx.date);
+      if (!txByDate[dStr]) txByDate[dStr] = [];
       txByDate[dStr].push(tx);
     }
 
-    // Loop through each day from the first transaction's date up to today (IST)
-    const firstTxDate = transactions[0].date;
-    const current = new Date(firstTxDate.getTime() + 5.5 * 60 * 60 * 1000);
-    current.setUTCHours(0, 0, 0, 0);
-
-    const end = new Date(new Date().getTime() + 5.5 * 60 * 60 * 1000);
+    // 3. Loop from start date to today and upsert balances
+    const current = new Date(Date.UTC(yyyy, mm - 1, dd));
+    const end = new Date(new Date().getTime() + istOffset);
     end.setUTCHours(0, 0, 0, 0);
 
     while (current.getTime() <= end.getTime()) {
-      const yyyy = current.getUTCFullYear();
-      const mm = String(current.getUTCMonth() + 1).padStart(2, '0');
-      const dd = String(current.getUTCDate()).padStart(2, '0');
-      const dateStr = `${yyyy}-${mm}-${dd}`;
+      const cyyyy = current.getUTCFullYear();
+      const cmm = String(current.getUTCMonth() + 1).padStart(2, '0');
+      const cdd = String(current.getUTCDate()).padStart(2, '0');
+      const dateStr = `${cyyyy}-${cmm}-${cdd}`;
 
-      // Apply transactions on this day
       const dayTxs = txByDate[dateStr] || [];
       for (const tx of dayTxs) {
         const isCredit = tx.type === 'receipt' || tx.type === 'metalIn';
@@ -801,7 +847,6 @@ export async function recalculateDailyBalances(): Promise<void> {
         }
       }
 
-      // Save daily closing balance
       await DailyClosingBalance.findOneAndUpdate(
         { date: dateStr },
         {
@@ -814,11 +859,10 @@ export async function recalculateDailyBalances(): Promise<void> {
         { upsert: true, new: true }
       );
 
-      // Increment day
       current.setUTCDate(current.getUTCDate() + 1);
     }
 
-    console.log('[DAILY BALANCE RECALCULATION] Successfully completed.');
+    console.log(`[DAILY BALANCE RECALCULATION] Successfully completed${fromDate ? ` (incremental from ${startDateStr})` : ' (full)'}.`);
   } catch (error) {
     console.error('[DAILY BALANCE RECALCULATION] Error: ', error);
   }
@@ -956,9 +1000,27 @@ app.get('/api/transactions', authenticate, async (req, res) => {
 });
 app.post('/api/transactions', authenticate, async (req, res) => {
   try {
+    // Idempotency: check if an identical transaction was created in the last 60 seconds
+    const sixtySecondsAgo = new Date(Date.now() - 60 * 1000);
+    const duplicate = await Transaction.findOne({
+      partyId: req.body.partyId,
+      type: req.body.type,
+      paymentMode: req.body.paymentMode,
+      cashAmount: req.body.cashAmount,
+      metalType: req.body.metalType,
+      metalWeight: req.body.metalWeight,
+      date: req.body.date,
+      createdAt: { $gte: sixtySecondsAgo },
+    });
+    if (duplicate) {
+      console.log(`[IDEMPOTENCY] Duplicate transaction detected, returning existing: ${duplicate._id}`);
+      return res.status(201).json(duplicate);
+    }
+
     const newTx = new Transaction(req.body);
     const savedTx = await newTx.save();
-    await recalculateDailyBalances();
+    // Run balance recalculation in background (incremental from this transaction's date)
+    recalculateDailyBalances(savedTx.date).catch(err => console.error('[DAILY BALANCE RECALCULATION] Background error:', err));
     res.status(201).json(savedTx);
   } catch (err: any) {
     res.status(400).json({ error: err.message });
@@ -966,8 +1028,11 @@ app.post('/api/transactions', authenticate, async (req, res) => {
 });
 app.put('/api/transactions/:id', authenticate, requireAdmin, async (req, res) => {
   try {
+    const oldTx = await Transaction.findById(req.params.id);
     const updatedTx = await Transaction.findByIdAndUpdate(req.params.id, req.body, { new: true });
-    await recalculateDailyBalances();
+    // Run incremental recalculation from the earlier of old/new date
+    const recalcFrom = oldTx && updatedTx ? (oldTx.date < updatedTx.date ? oldTx.date : updatedTx.date) : undefined;
+    recalculateDailyBalances(recalcFrom).catch(err => console.error('[DAILY BALANCE RECALCULATION] Background error:', err));
     res.json(updatedTx);
   } catch (err: any) {
     res.status(400).json({ error: err.message });
@@ -975,8 +1040,11 @@ app.put('/api/transactions/:id', authenticate, requireAdmin, async (req, res) =>
 });
 app.delete('/api/transactions/:id', authenticate, requireAdmin, async (req, res) => {
   try {
+    const txToDelete = await Transaction.findById(req.params.id);
+    const deleteDate = txToDelete?.date;
     await Transaction.findByIdAndDelete(req.params.id);
-    await recalculateDailyBalances();
+    // Run incremental recalculation from the deleted transaction's date
+    recalculateDailyBalances(deleteDate).catch(err => console.error('[DAILY BALANCE RECALCULATION] Background error:', err));
     res.json({ message: 'Transaction deleted successfully' });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
