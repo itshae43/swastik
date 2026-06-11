@@ -7,6 +7,7 @@ import 'package:swastik_mobile_app/core/models/party_model.dart';
 import 'package:swastik_mobile_app/core/models/transaction_model.dart';
 import 'package:swastik_mobile_app/core/utils/responsive_utils.dart';
 import 'package:swastik_mobile_app/core/utils/time_utils.dart';
+import 'package:swastik_mobile_app/core/utils/formatters.dart';
 import 'package:swastik_mobile_app/features/ledger/providers/transaction_providers.dart';
 import 'package:swastik_mobile_app/features/parties/providers/party_providers.dart';
 import 'package:swastik_mobile_app/features/parties/presentation/widgets/quick_add_party_bottom_sheet.dart';
@@ -6450,25 +6451,74 @@ class _TabletQuickAddEntryDialogState
         focusNode: _partyFocusNode,
         textEditingController: _partyController,
         optionsBuilder: (TextEditingValue textEditingValue) {
-          final query = textEditingValue.text.trim().toLowerCase();
+          final queryText = textEditingValue.text.trim();
+          final queryLower = queryText.toLowerCase();
           final parties = ref.read(partiesStreamProvider).value ?? [];
 
-          if (query.isEmpty) {
+          if (queryText.isEmpty) {
             final recent = parties.toList()
               ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
             return recent.take(5);
           }
 
           final matches = parties.where((party) {
-            return party.name.toLowerCase().contains(query) ||
-                party.phone.contains(query);
+            return party.name.toLowerCase().contains(queryLower) ||
+                party.phone.contains(queryLower);
           }).toList();
+
+          final hasExactMatch = matches.any((party) => party.name.toLowerCase() == queryLower);
+          if (!hasExactMatch) {
+            matches.add(
+              PartyModel(
+                id: 'ADD_NEW_PARTY_PLACEHOLDER',
+                name: queryText,
+                type: '',
+                phone: '',
+                email: '',
+                address: '',
+                cashBalance: 0.0,
+                goldBalanceGrams: 0.0,
+                silverBalanceGrams: 0.0,
+                diamondBalanceCarats: 0.0,
+                openingCashBalance: 0.0,
+                openingGoldBalanceGrams: 0.0,
+                openingDiamondBalanceCarats: 0.0,
+                createdAt: TimeUtils.now,
+                updatedAt: TimeUtils.now,
+              ),
+            );
+          }
 
           return matches;
         },
         displayStringForOption: (PartyModel option) => option.name,
-        onSelected: (PartyModel selection) {
-          setState(() => _selectedParty = selection);
+        onSelected: (PartyModel selection) async {
+          if (selection.id == 'ADD_NEW_PARTY_PLACEHOLDER') {
+            final newId = await showModalBottomSheet(
+              context: context,
+              isScrollControlled: true,
+              backgroundColor: Colors.transparent,
+              builder: (context) => QuickAddPartyBottomSheet(initialName: selection.name),
+            );
+            if (newId != null && newId is String) {
+              final list = ref.read(partiesStreamProvider).value ?? [];
+              final found = list.where((p) => p.id == newId).firstOrNull;
+              if (found != null) {
+                setState(() {
+                  _selectedParty = found;
+                  _partyController.text = found.name;
+                  _pendingPartyId = null;
+                });
+              } else {
+                setState(() => _pendingPartyId = newId);
+              }
+            } else {
+              _partyController.clear();
+              setState(() => _selectedParty = null);
+            }
+          } else {
+            setState(() => _selectedParty = selection);
+          }
           WidgetsBinding.instance.addPostFrameCallback((_) {
             _partyFocusNode.unfocus();
           });
@@ -6478,6 +6528,7 @@ class _TabletQuickAddEntryDialogState
               return TextField(
                 controller: textEditingController,
                 focusNode: focusNode,
+                inputFormatters: [UpperCaseTextFormatter()],
                 style: GoogleFonts.montserrat(fontSize: 14),
                 decoration: InputDecoration(
                   hintText: 'Search party name or phone...',
@@ -6542,6 +6593,37 @@ class _TabletQuickAddEntryDialogState
                   itemCount: options.length,
                   itemBuilder: (BuildContext context, int index) {
                     final option = options.elementAt(index);
+                    final isPlaceholder = option.id == 'ADD_NEW_PARTY_PLACEHOLDER';
+
+                    if (isPlaceholder) {
+                      return ListTile(
+                        leading: const CircleAvatar(
+                          backgroundColor: Color(0xFFFFEEB3),
+                          radius: 16,
+                          child: Icon(
+                            Icons.add,
+                            color: Color(0xFF735C0F),
+                            size: 16,
+                          ),
+                        ),
+                        title: Text(
+                          'Create new: "${option.name}"',
+                          style: GoogleFonts.montserrat(
+                            fontWeight: FontWeight.bold,
+                            color: const Color(0xFF735C0F),
+                          ),
+                        ),
+                        subtitle: Text(
+                          'Tap to add customer details',
+                          style: GoogleFonts.montserrat(
+                            fontSize: 11,
+                            color: Colors.black54,
+                          ),
+                        ),
+                        dense: true,
+                        onTap: () => onSelected(option),
+                      );
+                    }
 
                     return ListTile(
                       leading: CircleAvatar(

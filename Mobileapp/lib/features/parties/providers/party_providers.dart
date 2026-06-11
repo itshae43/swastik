@@ -62,7 +62,7 @@ class PartyNotifier extends Notifier<PartyState> {
       final now = TimeUtils.now;
       final party = PartyModel(
         id: '', // Firestore will generate this
-        name: name,
+        name: name.trim().toUpperCase(),
         type: type,
         phone: phone,
         email: email,

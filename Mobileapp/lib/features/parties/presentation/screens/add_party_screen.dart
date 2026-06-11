@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:swastik_mobile_app/core/utils/formatters.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
@@ -131,9 +132,10 @@ class _AddPartyScreenState extends ConsumerState<AddPartyScreen> {
                         children: [
                           _buildTextField(
                             label: 'Full Name *',
-                            hint: 'e.g. Ramesh Jewellers',
+                            hint: 'e.g. RAMESH JEWELLERS',
                             prefixIcon: Icons.person_outline,
                             controller: _nameController,
+                            inputFormatters: [UpperCaseTextFormatter()],
                           ),
                           const SizedBox(height: 16),
                           _buildPhoneField(controller: _phoneController),
@@ -664,6 +666,7 @@ class _AddPartyScreenState extends ConsumerState<AddPartyScreen> {
     IconData? prefixIcon,
     int maxLines = 1,
     TextEditingController? controller,
+    List<TextInputFormatter>? inputFormatters,
   }) {
     List<TextSpan> labelSpans = [];
     if (label.contains('*')) {
@@ -699,6 +702,7 @@ class _AddPartyScreenState extends ConsumerState<AddPartyScreen> {
           ),
           child: TextField(
             maxLines: maxLines,
+            inputFormatters: inputFormatters,
             decoration: InputDecoration(
               hintText: hint,
               hintStyle: GoogleFonts.montserrat(color: Colors.grey[400]),

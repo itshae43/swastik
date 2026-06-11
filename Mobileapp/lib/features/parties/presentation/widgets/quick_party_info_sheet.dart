@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:swastik_mobile_app/core/utils/formatters.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -41,7 +43,7 @@ class _QuickPartyInfoSheetState extends ConsumerState<QuickPartyInfoSheet> {
   }
 
   Future<void> _saveChanges() async {
-    final name = _nameController.text.trim();
+    final name = _nameController.text.trim().toUpperCase();
     if (name.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Name cannot be empty')),
@@ -193,6 +195,7 @@ class _QuickPartyInfoSheetState extends ConsumerState<QuickPartyInfoSheet> {
               label: 'Party Name',
               controller: _nameController,
               icon: Icons.person_outline,
+              inputFormatters: [UpperCaseTextFormatter()],
             ),
             const SizedBox(height: 16),
             _buildTextField(
@@ -275,13 +278,12 @@ class _QuickPartyInfoSheetState extends ConsumerState<QuickPartyInfoSheet> {
         ),
       ],
     );
-  }
-
-  Widget _buildTextField({
+  }  Widget _buildTextField({
     required String label,
     required TextEditingController controller,
     required IconData icon,
     TextInputType? keyboardType,
+    List<TextInputFormatter>? inputFormatters,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -304,6 +306,7 @@ class _QuickPartyInfoSheetState extends ConsumerState<QuickPartyInfoSheet> {
           child: TextField(
             controller: controller,
             keyboardType: keyboardType,
+            inputFormatters: inputFormatters,
             style: GoogleFonts.montserrat(fontSize: 15),
             decoration: InputDecoration(
               prefixIcon: Icon(icon, color: Colors.grey[500], size: 20),

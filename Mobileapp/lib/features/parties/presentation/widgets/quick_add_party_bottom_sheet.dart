@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:swastik_mobile_app/core/utils/formatters.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:swastik_mobile_app/core/utils/responsive_utils.dart';
@@ -8,7 +10,8 @@ import 'package:swastik_mobile_app/features/auth/providers/auth_providers.dart';
 import '../../providers/party_providers.dart';
 
 class QuickAddPartyBottomSheet extends ConsumerStatefulWidget {
-  const QuickAddPartyBottomSheet({super.key});
+  final String? initialName;
+  const QuickAddPartyBottomSheet({super.key, this.initialName});
 
   @override
   ConsumerState<QuickAddPartyBottomSheet> createState() => _QuickAddPartyBottomSheetState();
@@ -19,6 +22,14 @@ class _QuickAddPartyBottomSheetState extends ConsumerState<QuickAddPartyBottomSh
   final _phoneController = TextEditingController();
   final _addressController = TextEditingController();
   bool _isSaved = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.initialName != null) {
+      _nameController.text = widget.initialName!.toUpperCase();
+    }
+  }
 
   // Contact sync state variables
   final _contactSearchController = TextEditingController();
@@ -189,9 +200,10 @@ class _QuickAddPartyBottomSheetState extends ConsumerState<QuickAddPartyBottomSh
             ],
             _buildTextField(
               label: 'Full Name *',
-              hint: 'e.g. Ramesh Jewellers',
+              hint: 'e.g. RAMESH JEWELLERS',
               prefixIcon: Icons.person_outline,
               controller: _nameController,
+              inputFormatters: [UpperCaseTextFormatter()],
             ),
             const SizedBox(height: 16),
             _buildPhoneField(controller: _phoneController),
@@ -279,7 +291,6 @@ class _QuickAddPartyBottomSheetState extends ConsumerState<QuickAddPartyBottomSh
       ),
     );
   }
-
   Widget _buildTextField({
     required String label,
     required String hint,
@@ -287,6 +298,7 @@ class _QuickAddPartyBottomSheetState extends ConsumerState<QuickAddPartyBottomSh
     int maxLines = 1,
     TextEditingController? controller,
     FocusNode? focusNode,
+    List<TextInputFormatter>? inputFormatters,
   }) {
     List<TextSpan> labelSpans = [];
     if (label.contains('*')) {
@@ -320,6 +332,7 @@ class _QuickAddPartyBottomSheetState extends ConsumerState<QuickAddPartyBottomSh
           child: TextField(
             maxLines: maxLines,
             focusNode: focusNode,
+            inputFormatters: inputFormatters,
             decoration: InputDecoration(
               hintText: hint,
               hintStyle: GoogleFonts.montserrat(color: Colors.grey[400]),

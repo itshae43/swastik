@@ -5,7 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:swastik_mobile_app/core/utils/time_utils.dart';
-
+import 'package:swastik_mobile_app/core/utils/formatters.dart';
 import 'package:swastik_mobile_app/core/models/party_model.dart';
 import 'package:swastik_mobile_app/core/models/transaction_model.dart';
 import 'package:swastik_mobile_app/core/utils/responsive_utils.dart';
@@ -1068,25 +1068,74 @@ class _EntriesScreenState extends ConsumerState<EntriesScreen> {
         focusNode: _partyFocusNode,
         textEditingController: _partyController,
         optionsBuilder: (TextEditingValue textEditingValue) {
-          final query = textEditingValue.text.trim().toLowerCase();
+          final queryText = textEditingValue.text.trim();
+          final queryLower = queryText.toLowerCase();
           final parties = ref.read(partiesStreamProvider).value ?? [];
 
-          if (query.isEmpty) {
+          if (queryText.isEmpty) {
             final recent = parties.toList()
               ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
             return recent.take(5);
           }
 
           final matches = parties.where((party) {
-            return party.name.toLowerCase().contains(query) ||
-                party.phone.contains(query);
+            return party.name.toLowerCase().contains(queryLower) ||
+                party.phone.contains(queryLower);
           }).toList();
+
+          final hasExactMatch = matches.any((party) => party.name.toLowerCase() == queryLower);
+          if (!hasExactMatch) {
+            matches.add(
+              PartyModel(
+                id: 'ADD_NEW_PARTY_PLACEHOLDER',
+                name: queryText,
+                type: '',
+                phone: '',
+                email: '',
+                address: '',
+                cashBalance: 0.0,
+                goldBalanceGrams: 0.0,
+                silverBalanceGrams: 0.0,
+                diamondBalanceCarats: 0.0,
+                openingCashBalance: 0.0,
+                openingGoldBalanceGrams: 0.0,
+                openingDiamondBalanceCarats: 0.0,
+                createdAt: TimeUtils.now,
+                updatedAt: TimeUtils.now,
+              ),
+            );
+          }
 
           return matches;
         },
         displayStringForOption: (PartyModel option) => option.name,
-        onSelected: (PartyModel selection) {
-          setState(() => _selectedParty = selection);
+        onSelected: (PartyModel selection) async {
+          if (selection.id == 'ADD_NEW_PARTY_PLACEHOLDER') {
+            final newId = await showModalBottomSheet(
+              context: context,
+              isScrollControlled: true,
+              backgroundColor: Colors.transparent,
+              builder: (context) => QuickAddPartyBottomSheet(initialName: selection.name),
+            );
+            if (newId != null && newId is String) {
+              final list = ref.read(partiesStreamProvider).value ?? [];
+              final found = list.where((p) => p.id == newId).firstOrNull;
+              if (found != null) {
+                setState(() {
+                  _selectedParty = found;
+                  _partyController.text = found.name;
+                  _pendingPartyId = null;
+                });
+              } else {
+                setState(() => _pendingPartyId = newId);
+              }
+            } else {
+              _partyController.clear();
+              setState(() => _selectedParty = null);
+            }
+          } else {
+            setState(() => _selectedParty = selection);
+          }
           WidgetsBinding.instance.addPostFrameCallback((_) {
             _partyFocusNode.unfocus();
           });
@@ -1096,6 +1145,7 @@ class _EntriesScreenState extends ConsumerState<EntriesScreen> {
               return TextField(
                 controller: textEditingController,
                 focusNode: focusNode,
+                inputFormatters: [UpperCaseTextFormatter()],
                 style: _textStyle(
                   context,
                   const TextStyle(fontSize: 15, color: Colors.black87),
@@ -1179,6 +1229,42 @@ class _EntriesScreenState extends ConsumerState<EntriesScreen> {
                     itemCount: options.length,
                     itemBuilder: (BuildContext context, int index) {
                       final option = options.elementAt(index);
+                      final isPlaceholder = option.id == 'ADD_NEW_PARTY_PLACEHOLDER';
+
+                      if (isPlaceholder) {
+                        return ListTile(
+                          leading: CircleAvatar(
+                            radius: isTablet ? 24 : 20,
+                            backgroundColor: const Color(0xFFFFEEB3),
+                            child: Icon(
+                              Icons.add,
+                              color: const Color(0xFF8A7311),
+                              size: isTablet ? 24 : 20,
+                            ),
+                          ),
+                          title: Text(
+                            'Create new: "${option.name}"',
+                            style: _textStyle(
+                              context,
+                              const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF8A7311),
+                              ),
+                            ),
+                          ),
+                          subtitle: Text(
+                            'Tap to add customer details',
+                            style: _textStyle(
+                              context,
+                              const TextStyle(
+                                fontSize: 12,
+                                color: Colors.black54,
+                              ),
+                            ),
+                          ),
+                          onTap: () => onSelected(option),
+                        );
+                      }
 
                       return ListTile(
                         leading: CircleAvatar(
