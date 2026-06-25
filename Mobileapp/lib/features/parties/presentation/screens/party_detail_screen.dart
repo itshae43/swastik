@@ -12,6 +12,7 @@ import 'package:swastik_mobile_app/core/utils/responsive_utils.dart';
 import 'package:swastik_mobile_app/core/utils/time_utils.dart';
 import 'package:swastik_mobile_app/features/auth/providers/auth_providers.dart';
 import 'package:intl/intl.dart';
+import 'package:swastik_mobile_app/features/ledger/presentation/widgets/customer_ledger_print_bottom_sheet.dart';
 
 // ──────────────────────────── DATA MODELS ────────────────────────────
 
@@ -155,12 +156,14 @@ class _PartyDetailScreenState extends ConsumerState<PartyDetailScreen> {
       ),
     );
 
+    final transactionsAsync = ref.watch(partyTransactionsStreamProvider(widget.party.id));
+
     return Scaffold(
       backgroundColor: isTablet ? const Color(0xFFFAF6EE) : const Color(0xFFFDFBF7),
       body: SafeArea(
         child: Column(
           children: [
-            _buildAppBar(partyModel),
+            _buildAppBar(partyModel, transactionsAsync.value ?? []),
             Expanded(
               child: SingleChildScrollView(
                 physics: const BouncingScrollPhysics(),
@@ -193,7 +196,7 @@ class _PartyDetailScreenState extends ConsumerState<PartyDetailScreen> {
   }
 
   // ─── APP BAR ─────────────────────────────────────────────────
-  Widget _buildAppBar(PartyModel partyModel) {
+  Widget _buildAppBar(PartyModel partyModel, List<TransactionModel> transactions) {
     final liveLocation = partyModel.address.isNotEmpty 
         ? partyModel.address.split(',').last.trim() 
         : 'India';
@@ -237,9 +240,7 @@ class _PartyDetailScreenState extends ConsumerState<PartyDetailScreen> {
           ),
           IconButton(
             onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Printing statement...')),
-              );
+              showCustomerLedgerPrintBottomSheet(context, partyModel, transactions);
             },
             icon: const Icon(Icons.print_outlined, color: Color(0xFF1E1E1E), size: 24),
             splashRadius: 24,

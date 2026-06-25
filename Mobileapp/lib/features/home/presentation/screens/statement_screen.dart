@@ -8,6 +8,7 @@ import 'package:swastik_mobile_app/core/utils/time_utils.dart';
 import 'package:swastik_mobile_app/features/ledger/providers/transaction_providers.dart';
 import 'package:swastik_mobile_app/core/services/pdf_service.dart';
 import 'package:swastik_mobile_app/features/auth/providers/auth_providers.dart';
+import 'package:swastik_mobile_app/features/home/presentation/widgets/dashboard_print_bottom_sheet.dart';
 
 class TransactionStatementScreen extends ConsumerStatefulWidget {
   final String category; // 'cash', 'online', 'gold', 'diamond'
@@ -145,7 +146,7 @@ class _TransactionStatementScreenState extends ConsumerState<TransactionStatemen
           IconButton(
             icon: const Icon(Icons.print_rounded, color: Color(0xFF5E543F)),
             tooltip: 'Print Statement',
-            onPressed: () {
+            onPressed: () async {
               // Extract values for dialog
               double totalBalance = 0.0;
               final listVal = transactionsAsync.value ?? [];
@@ -179,8 +180,19 @@ class _TransactionStatementScreenState extends ConsumerState<TransactionStatemen
               } else {
                 balanceStr = '${totalBalance % 1 == 0 ? totalBalance.toInt().toString() : totalBalance.toStringAsFixed(3).replaceAll(RegExp(r'\.?0+$'), '')} $_categoryUnit';
               }
-
-              _showPrintStatementDialog(context, categoryTxns, balanceStr);
+              try {
+                final pdfBytes = await PdfService.generateStatementPdf(
+                  transactions: categoryTxns,
+                  title: 'Statement',
+                  subtitle: 'Category: ${widget.category.toUpperCase()}',
+                  totalBalance: balanceStr,
+                );
+                await PdfService.printPdf(pdfBytes);
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error printing: $e')));
+                }
+              }
             },
           ),
           const SizedBox(width: 8),
@@ -1159,374 +1171,7 @@ class _TransactionStatementScreenState extends ConsumerState<TransactionStatemen
     );
   }
 
-  void _showPrintStatementDialog(
-    BuildContext context,
-    List<TransactionModel> txns,
-    String totalBalance,
-  ) {
-    showDialog(
-      context: context,
-      builder: (context) {
-        bool isPrinting = false;
-        bool isSaved = false;
 
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return Dialog(
-              backgroundColor: Colors.transparent,
-              child: Container(
-                constraints: const BoxConstraints(maxWidth: 500),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFAF6EE),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: const Color(0xFFDFBA6B), width: 1.5),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.15),
-                      blurRadius: 25,
-                      offset: const Offset(0, 10),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Header
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                      decoration: const BoxDecoration(
-                        color: Color(0xFF01565B),
-                        borderRadius: BorderRadius.only(
-                          topLeft: Radius.circular(18),
-                          topRight: Radius.circular(18),
-                        ),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            'Print Statement Preview',
-                            style: GoogleFonts.montserrat(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                            ),
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.close, color: Colors.white, size: 20),
-                            onPressed: () => Navigator.pop(context),
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints(),
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    if (isPrinting)
-                      Container(
-                        height: 350,
-                        alignment: Alignment.center,
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const CircularProgressIndicator(color: Color(0xFF01565B)),
-                            const SizedBox(height: 20),
-                            Text(
-                              'Preparing statement sheet...',
-                              style: GoogleFonts.montserrat(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                                color: const Color(0xFF5E543F),
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              'Sending documents to printer spooler...',
-                              style: GoogleFonts.montserrat(
-                                fontSize: 12,
-                                color: Colors.grey[600],
-                              ),
-                            ),
-                          ],
-                        ),
-                      )
-                    else if (isSaved)
-                      Container(
-                        height: 350,
-                        alignment: Alignment.center,
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(16),
-                              decoration: const BoxDecoration(
-                                color: Color(0xFFE8F8F0),
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Icon(
-                                Icons.check_circle_rounded,
-                                color: Color(0xFF01565B),
-                                size: 48,
-                              ),
-                            ),
-                            const SizedBox(height: 20),
-                            Text(
-                              'Statement Saved!',
-                              style: GoogleFonts.montserrat(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                                color: const Color(0xFF01565B),
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              'PDF saved to Downloads folder',
-                              style: GoogleFonts.montserrat(
-                                fontSize: 12,
-                                color: Colors.grey[600],
-                              ),
-                            ),
-                            const SizedBox(height: 24),
-                            ElevatedButton(
-                              onPressed: () => Navigator.pop(context),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF01565B),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                              ),
-                              child: Text(
-                                'Done',
-                                style: GoogleFonts.montserrat(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      )
-                    else ...[
-                      // A4 Document Preview
-                      Padding(
-                        padding: const EdgeInsets.all(20.0),
-                        child: Container(
-                          height: 260,
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: Colors.grey.withOpacity(0.2)),
-                          ),
-                          child: SingleChildScrollView(
-                            physics: const BouncingScrollPhysics(),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                Center(
-                                  child: Column(
-                                    children: [
-                                      Text(
-                                        'SWASTIK JEWELS',
-                                        style: GoogleFonts.montserrat(
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.bold,
-                                          color: const Color(0xFF01565B),
-                                        ),
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        'Period: ${DateFormat('dd MMM yyyy').format(TimeUtils.now.subtract(const Duration(days: 30)))} - ${DateFormat('dd MMM yyyy').format(TimeUtils.now)}',
-                                        style: GoogleFonts.montserrat(
-                                          fontSize: 9,
-                                          fontWeight: FontWeight.w600,
-                                          color: Colors.grey[600],
-                                        ),
-                                      ),
-                                      const SizedBox(height: 6),
-                                      Divider(height: 1, color: Colors.grey[300]),
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(height: 10),
-                                _buildReceiptRow('Store Balance:', totalBalance),
-                                _buildReceiptRow('Category:', widget.category.toUpperCase()),
-                                _buildReceiptRow('Total Entries:', '${txns.length} items'),
-                                const SizedBox(height: 10),
-                                Table(
-                                  border: TableBorder.all(color: Colors.grey.withOpacity(0.3), width: 0.5),
-                                  columnWidths: const {
-                                    0: FlexColumnWidth(2),
-                                    1: FlexColumnWidth(3),
-                                    2: FlexColumnWidth(2),
-                                  },
-                                  children: [
-                                    TableRow(
-                                      decoration: const BoxDecoration(color: Color(0xFFFAF6EE)),
-                                      children: [
-                                        Padding(
-                                          padding: const EdgeInsets.all(4.0),
-                                          child: Text('Date', style: GoogleFonts.montserrat(fontSize: 8, fontWeight: FontWeight.bold)),
-                                        ),
-                                        Padding(
-                                          padding: const EdgeInsets.all(4.0),
-                                          child: Text('Party / Mode', style: GoogleFonts.montserrat(fontSize: 8, fontWeight: FontWeight.bold)),
-                                        ),
-                                        Padding(
-                                          padding: const EdgeInsets.all(4.0),
-                                          child: Text('Amount', style: GoogleFonts.montserrat(fontSize: 8, fontWeight: FontWeight.bold)),
-                                        ),
-                                      ],
-                                    ),
-                                    ...txns.take(8).map((txn) {
-                                      final isCr = txn.type == TransactionType.receipt || txn.type == TransactionType.metalIn;
-                                      final amt = txn.metalType.isEmpty 
-                                          ? '₹${NumberFormat.decimalPattern('en_IN').format(txn.cashAmount)}'
-                                          : '${txn.metalWeight} ${widget.category == 'gold' ? 'g' : 'ct'}';
-                                      return TableRow(
-                                        children: [
-                                          Padding(
-                                            padding: const EdgeInsets.all(4.0),
-                                            child: Text(DateFormat('dd MMM').format(txn.date), style: GoogleFonts.montserrat(fontSize: 8)),
-                                          ),
-                                          Padding(
-                                            padding: const EdgeInsets.all(4.0),
-                                            child: Text(txn.partyName, style: GoogleFonts.montserrat(fontSize: 8), overflow: TextOverflow.ellipsis),
-                                          ),
-                                          Padding(
-                                            padding: const EdgeInsets.all(4.0),
-                                            child: Text('${isCr ? '+' : '-'}$amt', style: GoogleFonts.montserrat(fontSize: 8, fontWeight: FontWeight.bold, color: isCr ? const Color(0xFF01565B) : const Color(0xFFC62828))),
-                                          ),
-                                        ],
-                                      );
-                                    }),
-                                  ],
-                                ),
-                                if (txns.length > 8) ...[
-                                  const SizedBox(height: 6),
-                                  Center(
-                                    child: Text(
-                                      '... and ${txns.length - 8} more entries ...',
-                                      style: GoogleFonts.montserrat(fontSize: 8, color: Colors.grey),
-                                    ),
-                                  ),
-                                ],
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-
-                      // Print Dialog Actions
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: OutlinedButton.icon(
-                                onPressed: () async {
-                                  setDialogState(() {
-                                    isPrinting = true;
-                                  });
-                                  try {
-                                    final pdfBytes = await PdfService.generateStatementPdf(
-                                      transactions: txns,
-                                      title: 'Statement',
-                                      subtitle: 'Category: ${widget.category.toUpperCase()}',
-                                      totalBalance: totalBalance,
-                                    );
-                                    await PdfService.printPdf(pdfBytes);
-                                    Navigator.pop(context);
-                                  } catch (e) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(content: Text('Error printing: $e')),
-                                    );
-                                    setDialogState(() {
-                                      isPrinting = false;
-                                    });
-                                  }
-                                },
-                                icon: const Icon(Icons.print_rounded, size: 18, color: Color(0xFF01565B)),
-                                label: Text(
-                                  'Print A4',
-                                  style: GoogleFonts.montserrat(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.bold,
-                                    color: const Color(0xFF01565B),
-                                  ),
-                                ),
-                                style: OutlinedButton.styleFrom(
-                                  side: const BorderSide(color: Color(0xFF01565B), width: 1.5),
-                                  padding: const EdgeInsets.symmetric(vertical: 12),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: ElevatedButton.icon(
-                                onPressed: () async {
-                                  setDialogState(() {
-                                    isPrinting = true;
-                                  });
-                                  try {
-                                    final pdfBytes = await PdfService.generateStatementPdf(
-                                      transactions: txns,
-                                      title: 'Statement',
-                                      subtitle: 'Category: ${widget.category.toUpperCase()}',
-                                      totalBalance: totalBalance,
-                                    );
-                                    final success = await PdfService.savePdfToDownloads(
-                                      pdfBytes,
-                                      'Statement_${widget.category}_${DateTime.now().millisecondsSinceEpoch}',
-                                    );
-                                    setDialogState(() {
-                                      isPrinting = false;
-                                      isSaved = success;
-                                    });
-                                  } catch (e) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(content: Text('Error saving PDF: $e')),
-                                    );
-                                    setDialogState(() {
-                                      isPrinting = false;
-                                    });
-                                  }
-                                },
-                                icon: const Icon(Icons.picture_as_pdf, size: 18, color: Colors.white),
-                                label: Text(
-                                  'Export PDF',
-                                  style: GoogleFonts.montserrat(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.white,
-                                  ),
-                                ),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: const Color(0xFF01565B),
-                                  padding: const EdgeInsets.symmetric(vertical: 12),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                    ],
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
 
   void _showDeleteTransactionDialog(TransactionModel txn) {
     showDialog(
