@@ -114,6 +114,24 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     return _selectedTableFilter;
   }
 
+  /// Returns a nicely formatted period string for the PDF print output.
+  String get _periodPrintLabel {
+    final now = TimeUtils.now;
+    if (_selectedTableFilter == 'Custom' && _customFilterResult != null) {
+      return _customFilterResult!.displayLabel;
+    } else if (_selectedTableFilter == 'Today') {
+      return DateFormat('dd MMM yyyy').format(now);
+    } else if (_selectedTableFilter == 'This Month') {
+      return DateFormat('MMM yyyy').format(now);
+    } else if (_selectedTableFilter == 'This Week') {
+      final startOfWeek = now.subtract(Duration(days: now.weekday - 1));
+      return '${DateFormat('dd MMM').format(startOfWeek)} - ${DateFormat('dd MMM yyyy').format(now)}';
+    } else if (_selectedTableFilter == 'All') {
+      return 'All Time';
+    }
+    return _selectedTableFilter;
+  }
+
   /// Opens the premium custom filter bottom sheet.
   Future<void> _openCustomFilterSheet() async {
     final result = await showModalBottomSheet<CustomFilterResult>(
@@ -930,9 +948,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         onTap: () async {
                           try {
                             final pdfBytes = await PdfService.generateStatementPdf(
-                              transactions: filtered,
+                              transactions: List.from(filtered)..sort((a, b) => a.date.compareTo(b.date)),
                               title: 'Statement',
-                              subtitle: 'Period: $_filterDisplayLabel',
+                              subtitle: null,
+                              periodText: 'PERIOD: ${_periodPrintLabel.toUpperCase()}',
                             );
                             await PdfService.printPdf(pdfBytes);
                           } catch (e) {
@@ -2047,9 +2066,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               onTap: () async {
                 try {
                   final pdfBytes = await PdfService.generateStatementPdf(
-                    transactions: filteredTransactions,
+                    transactions: List.from(filteredTransactions)..sort((a, b) => a.date.compareTo(b.date)),
                     title: 'Statement',
-                    subtitle: 'Period: $_filterDisplayLabel',
+                    subtitle: null,
+                    periodText: 'PERIOD: ${_periodPrintLabel.toUpperCase()}',
                   );
                   await PdfService.printPdf(pdfBytes);
                 } catch (e) {

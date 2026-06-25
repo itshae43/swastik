@@ -248,7 +248,8 @@ class _DashboardPrintBottomSheetState extends State<DashboardPrintBottomSheet> {
                           final pdfBytes = await PdfService.generateStatementPdf(
                             transactions: txns,
                             title: widget.title,
-                            subtitle: widget.subtitle,
+                            subtitle: null,
+                            periodText: widget.subtitle.toUpperCase(),
                             totalBalance: widget.totalBalance,
                           );
                           await PdfService.printPdf(pdfBytes);
@@ -281,7 +282,8 @@ class _DashboardPrintBottomSheetState extends State<DashboardPrintBottomSheet> {
                           final pdfBytes = await PdfService.generateStatementPdf(
                             transactions: txns,
                             title: widget.title,
-                            subtitle: widget.subtitle,
+                            subtitle: null,
+                            periodText: widget.subtitle.toUpperCase(),
                             totalBalance: widget.totalBalance,
                           );
                           final success = await PdfService.savePdfToDownloads(

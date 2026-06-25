@@ -26,6 +26,21 @@ class _TransactionStatementScreenState extends ConsumerState<TransactionStatemen
   String _typeFilter = 'All'; // 'All', 'IN', 'OUT'
   String _dateFilter = 'All Time'; // 'All Time', 'Today', 'This Week', 'This Month'
 
+  String get _periodPrintLabel {
+    final now = TimeUtils.now;
+    if (_dateFilter == 'Today') {
+      return DateFormat('dd MMM yyyy').format(now);
+    } else if (_dateFilter == 'This Month') {
+      return DateFormat('MMM yyyy').format(now);
+    } else if (_dateFilter == 'This Week') {
+      final startOfWeek = now.subtract(Duration(days: now.weekday - 1));
+      return '${DateFormat('dd MMM').format(startOfWeek)} - ${DateFormat('dd MMM yyyy').format(now)}';
+    } else if (_dateFilter == 'All Time') {
+      return 'All Time';
+    }
+    return _dateFilter;
+  }
+
   Color _getAvatarColorForName(String name) {
     if (name.isEmpty) return const Color(0xFF01565B);
     final code = name.codeUnitAt(0);
@@ -174,6 +189,27 @@ class _TransactionStatementScreenState extends ConsumerState<TransactionStatemen
                 }
               }
 
+              var filteredTxns = categoryTxns.where((t) {
+                final isCredit = t.type == TransactionType.receipt || t.type == TransactionType.metalIn;
+                final isDebit = t.type == TransactionType.payment || t.type == TransactionType.metalOut;
+                if (_typeFilter == 'IN') return isCredit;
+                if (_typeFilter == 'OUT') return isDebit;
+                return true;
+              }).toList();
+
+              final now = TimeUtils.now;
+              filteredTxns = filteredTxns.where((t) {
+                if (_dateFilter == 'Today') {
+                  return t.date.year == now.year && t.date.month == now.month && t.date.day == now.day;
+                } else if (_dateFilter == 'This Week') {
+                  final weekAgo = now.subtract(const Duration(days: 7));
+                  return t.date.isAfter(weekAgo);
+                } else if (_dateFilter == 'This Month') {
+                  return t.date.year == now.year && t.date.month == now.month;
+                }
+                return true;
+              }).toList();
+
               String balanceStr = '';
               if (widget.category == 'cash' || widget.category == 'online') {
                 balanceStr = '₹ ${NumberFormat.decimalPattern('en_IN').format(totalBalance)}';
@@ -181,12 +217,13 @@ class _TransactionStatementScreenState extends ConsumerState<TransactionStatemen
                 balanceStr = '${totalBalance % 1 == 0 ? totalBalance.toInt().toString() : totalBalance.toStringAsFixed(3).replaceAll(RegExp(r'\.?0+$'), '')} $_categoryUnit';
               }
               try {
-                final pdfBytes = await PdfService.generateStatementPdf(
-                  transactions: categoryTxns,
-                  title: 'Statement',
-                  subtitle: 'Category: ${widget.category.toUpperCase()}',
-                  totalBalance: balanceStr,
-                );
+                  final pdfBytes = await PdfService.generateStatementPdf(
+                    transactions: List.from(filteredTxns)..sort((a, b) => a.date.compareTo(b.date)),
+                    title: 'Statement',
+                    subtitle: 'Category: ${widget.category.toUpperCase()}',
+                    periodText: 'PERIOD: ${_periodPrintLabel.toUpperCase()}',
+                    totalBalance: balanceStr,
+                  );
                 await PdfService.printPdf(pdfBytes);
               } catch (e) {
                 if (context.mounted) {

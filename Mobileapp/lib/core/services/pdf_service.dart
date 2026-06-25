@@ -480,7 +480,8 @@ class PdfService {
   static Future<Uint8List> generateStatementPdf({
     required List<TransactionModel> transactions,
     required String title,
-    required String subtitle,
+    String? subtitle,
+    required String periodText,
     String? totalBalance,
   }) async {
     final pdf = pw.Document();
@@ -530,9 +531,20 @@ class PdfService {
                               color: PdfColors.grey700,
                             ),
                           ),
+                          if (subtitle != null && subtitle.isNotEmpty) ...[
+                            pw.SizedBox(height: 4),
+                            pw.Text(
+                              subtitle,
+                              style: pw.TextStyle(
+                                font: fontRegular,
+                                fontSize: 9,
+                                color: PdfColors.grey700,
+                              ),
+                            ),
+                          ],
                           pw.SizedBox(height: 4),
                           pw.Text(
-                            subtitle,
+                            'DATE: ${DateFormat('dd MMM yyyy').format(TimeUtils.now)}',
                             style: pw.TextStyle(
                               font: fontRegular,
                               fontSize: 9,
@@ -557,7 +569,7 @@ class PdfService {
                     pw.Align(
                       alignment: pw.Alignment.centerRight,
                       child: pw.Text(
-                        'DATE: ${DateFormat('dd MMM yyyy').format(TimeUtils.now)}',
+                        periodText,
                         style: pw.TextStyle(font: fontBold, fontSize: 10, color: brandTeal),
                       ),
                     ),
