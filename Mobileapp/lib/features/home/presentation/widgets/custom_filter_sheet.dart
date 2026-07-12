@@ -613,7 +613,7 @@ class _CustomFilterSheetState extends State<CustomFilterSheet>
         : null;
 
     bool isStart = normalizedDate.isAtSameMomentAs(normalizedStart);
-    bool isEnd = normalizedEnd != null && normalizedDate.isAtSameMomentAs(normalizedEnd);
+    bool isEnd = _isDateRange && normalizedEnd != null && normalizedDate.isAtSameMomentAs(normalizedEnd);
     bool isSingle = !_isDateRange || (isStart && normalizedEnd == null) || (isStart && isEnd);
 
     bool inRange = false;
@@ -702,7 +702,6 @@ class _CustomFilterSheetState extends State<CustomFilterSheet>
           if (_selectedEndDate != null && _selectedDate.isAfter(_selectedEndDate!)) {
             _selectedEndDate = _selectedDate.add(const Duration(days: 1));
           }
-          _selectingStartDate = false;
         } else {
           _selectedEndDate = date;
           if (_selectedDate.isAfter(_selectedEndDate!)) {
