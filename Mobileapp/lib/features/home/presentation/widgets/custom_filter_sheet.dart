@@ -5,11 +5,14 @@ import 'package:swastik_mobile_app/core/utils/time_utils.dart';
 
 /// Result returned when the user applies a custom filter.
 class CustomFilterResult {
-  /// 'date' or 'month_year'
+  /// 'date', 'date_range', or 'month_year'
   final String type;
 
-  /// Only set when type == 'date'
+  /// Only set when type == 'date' or 'date_range'
   final DateTime? date;
+
+  /// Only set when type == 'date_range'
+  final DateTime? endDate;
 
   /// 1‑12, set for 'month_year'
   final int? month;
@@ -20,6 +23,7 @@ class CustomFilterResult {
   const CustomFilterResult({
     required this.type,
     this.date,
+    this.endDate,
     this.month,
     this.year,
   });
@@ -30,6 +34,11 @@ class CustomFilterResult {
       case 'date':
         if (date != null) return DateFormat('dd MMM yyyy').format(date!);
         return 'Custom Date';
+      case 'date_range':
+        if (date != null && endDate != null) {
+          return '${DateFormat('dd MMM').format(date!)} - ${DateFormat('dd MMM').format(endDate!)}';
+        }
+        return 'Custom Range';
       case 'month_year':
         if (month != null && year != null) {
           return '${DateFormat.MMMM().format(DateTime(0, month!))} $year';
@@ -67,6 +76,12 @@ class _CustomFilterSheetState extends State<CustomFilterSheet>
 
   // ── State ──────────────────────────────────────────────────────
   DateTime _selectedDate = TimeUtils.now;
+  DateTime? _selectedEndDate;
+  bool _isDateRange = false;
+  bool _selectingStartDate = true;
+
+  late DateTime _currentMonth;
+
   int _selectedMonth = TimeUtils.now.month;
   int _selectedYear = TimeUtils.now.year;
 
@@ -81,13 +96,25 @@ class _CustomFilterSheetState extends State<CustomFilterSheet>
     // Reduced length to 2
     _tabController = TabController(length: 2, vsync: this);
 
+    _currentMonth = DateTime(TimeUtils.now.year, TimeUtils.now.month);
+
     // Restore previous selection
     final init = widget.initial;
     if (init != null) {
       switch (init.type) {
         case 'date':
           _tabController.index = 0;
+          if (init.date != null) {
+            _selectedDate = init.date!;
+            _currentMonth = DateTime(_selectedDate.year, _selectedDate.month);
+          }
+          break;
+        case 'date_range':
+          _tabController.index = 0;
+          _isDateRange = true;
           if (init.date != null) _selectedDate = init.date!;
+          if (init.endDate != null) _selectedEndDate = init.endDate!;
+          _currentMonth = DateTime(_selectedDate.year, _selectedDate.month);
           break;
         case 'month_year':
           _tabController.index = 1;
@@ -206,7 +233,7 @@ class _CustomFilterSheetState extends State<CustomFilterSheet>
 
             // Content
             SizedBox(
-              height: 340,
+              height: 440,
               child: TabBarView(
                 controller: _tabController,
                 physics: const NeverScrollableScrollPhysics(),
@@ -289,58 +316,401 @@ class _CustomFilterSheetState extends State<CustomFilterSheet>
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Column(
         children: [
-          // Selected date chip
+          // Single / Multiple Day Toggle
           Container(
-            margin: const EdgeInsets.only(bottom: 8),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.all(4),
             decoration: BoxDecoration(
-              color: _teal.withOpacity(0.08),
+              color: _beige,
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: _teal.withOpacity(0.2)),
+              border: Border.all(color: _cardBorder),
             ),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.calendar_today_rounded,
-                    size: 16, color: _teal),
-                const SizedBox(width: 8),
-                Text(
-                  DateFormat('EEEE, dd MMMM yyyy').format(_selectedDate),
-                  style: GoogleFonts.montserrat(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: _teal,
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () {
+                      setState(() {
+                        _isDateRange = false;
+                      });
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      decoration: BoxDecoration(
+                        color: !_isDateRange ? _teal : Colors.transparent,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(
+                        'Single Day',
+                        style: GoogleFonts.montserrat(
+                          fontSize: 12,
+                          fontWeight: !_isDateRange ? FontWeight.bold : FontWeight.w600,
+                          color: !_isDateRange ? Colors.white : _darkGold,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () {
+                      setState(() {
+                        _isDateRange = true;
+                        _selectedEndDate ??= _selectedDate.add(const Duration(days: 1));
+                        _selectingStartDate = true;
+                      });
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      decoration: BoxDecoration(
+                        color: _isDateRange ? _teal : Colors.transparent,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(
+                        'Multiple Days',
+                        style: GoogleFonts.montserrat(
+                          fontSize: 12,
+                          fontWeight: _isDateRange ? FontWeight.bold : FontWeight.w600,
+                          color: _isDateRange ? Colors.white : _darkGold,
+                        ),
+                      ),
+                    ),
                   ),
                 ),
               ],
             ),
           ),
-          Expanded(
-            child: Theme(
-              data: Theme.of(context).copyWith(
-                colorScheme: Theme.of(context).colorScheme.copyWith(
-                      primary: _teal,
-                      onPrimary: Colors.white,
-                      surface: Colors.white,
-                      onSurface: _textDark,
-                    ),
-                textTheme: Theme.of(context).textTheme.apply(
-                      fontFamily: GoogleFonts.montserrat().fontFamily,
-                    ),
+
+          // Selected date chip(s)
+          if (!_isDateRange)
+            Container(
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              decoration: BoxDecoration(
+                color: _teal.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: _teal.withOpacity(0.2)),
               ),
-              child: CalendarDatePicker(
-                initialDate: _selectedDate,
-                firstDate: DateTime(2000),
-                lastDate: TimeUtils.now.add(const Duration(days: 365)),
-                onDateChanged: (date) {
-                  setState(() => _selectedDate = date);
-                },
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.calendar_today_rounded, size: 16, color: _teal),
+                  const SizedBox(width: 8),
+                  Text(
+                    DateFormat('EEEE, dd MMMM yyyy').format(_selectedDate),
+                    style: GoogleFonts.montserrat(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: _teal,
+                    ),
+                  ),
+                ],
               ),
+            )
+          else
+            Row(
+              children: [
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () => setState(() => _selectingStartDate = true),
+                    child: Container(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: _selectingStartDate ? _teal.withOpacity(0.08) : Colors.transparent,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: _selectingStartDate ? _teal.withOpacity(0.3) : _cardBorder,
+                        ),
+                      ),
+                      child: Column(
+                        children: [
+                          Text(
+                            'Start Date',
+                            style: GoogleFonts.montserrat(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                              color: _selectingStartDate ? _teal : Colors.grey[600],
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            DateFormat('dd MMM yyyy').format(_selectedDate),
+                            style: GoogleFonts.montserrat(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: _selectingStartDate ? _teal : _textDark,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () => setState(() => _selectingStartDate = false),
+                    child: Container(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: !_selectingStartDate ? _teal.withOpacity(0.08) : Colors.transparent,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: !_selectingStartDate ? _teal.withOpacity(0.3) : _cardBorder,
+                        ),
+                      ),
+                      child: Column(
+                        children: [
+                          Text(
+                            'End Date',
+                            style: GoogleFonts.montserrat(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                              color: !_selectingStartDate ? _teal : Colors.grey[600],
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            _selectedEndDate != null
+                                ? DateFormat('dd MMM yyyy').format(_selectedEndDate!)
+                                : 'Select',
+                            style: GoogleFonts.montserrat(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: !_selectingStartDate ? _teal : _textDark,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
+
+          Expanded(
+            child: _buildCustomCalendar(),
           ),
         ],
       ),
     );
+  }
+
+  // ── Custom Calendar Logic ──────────────────────────────────────
+  Widget _buildCustomCalendar() {
+    final year = _currentMonth.year;
+    final month = _currentMonth.month;
+    final daysInMonth = DateUtils.getDaysInMonth(year, month);
+    final firstDayOffset = DateTime(year, month, 1).weekday % 7; // Sunday=0
+
+    const weekdays = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+
+    return Column(
+      children: [
+        // Header
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 12),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Text(
+                    DateFormat('MMMM yyyy').format(_currentMonth),
+                    style: GoogleFonts.montserrat(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: _textDark,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Icon(Icons.arrow_drop_down_rounded, color: Colors.grey[600], size: 20),
+                ],
+              ),
+              Row(
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.chevron_left_rounded, color: _textDark),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                    splashRadius: 20,
+                    onPressed: () {
+                      setState(() {
+                        _currentMonth = DateTime(year, month - 1);
+                      });
+                    },
+                  ),
+                  const SizedBox(width: 16),
+                  IconButton(
+                    icon: const Icon(Icons.chevron_right_rounded, color: _textDark),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                    splashRadius: 20,
+                    onPressed: () {
+                      setState(() {
+                        _currentMonth = DateTime(year, month + 1);
+                      });
+                    },
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 8),
+        // Weekdays
+        Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: weekdays.map((day) => Expanded(
+              child: Center(
+                child: Text(
+                  day,
+                  style: GoogleFonts.montserrat(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    color: _textDark,
+                  ),
+                ),
+              ),
+            )).toList(),
+          ),
+        ),
+        // Grid
+        Expanded(
+          child: GridView.builder(
+            padding: EdgeInsets.zero,
+            physics: const NeverScrollableScrollPhysics(),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 7,
+              childAspectRatio: 1.0,
+            ),
+            itemCount: firstDayOffset + daysInMonth,
+            itemBuilder: (context, index) {
+              if (index < firstDayOffset) return const SizedBox.shrink();
+
+              final day = index - firstDayOffset + 1;
+              final date = DateTime(year, month, day);
+
+              return _buildCalendarCell(date);
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCalendarCell(DateTime date) {
+    final normalizedDate = DateTime(date.year, date.month, date.day);
+    final normalizedStart = DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day);
+    final normalizedEnd = _selectedEndDate != null
+        ? DateTime(_selectedEndDate!.year, _selectedEndDate!.month, _selectedEndDate!.day)
+        : null;
+
+    bool isStart = normalizedDate.isAtSameMomentAs(normalizedStart);
+    bool isEnd = normalizedEnd != null && normalizedDate.isAtSameMomentAs(normalizedEnd);
+    bool isSingle = !_isDateRange || (isStart && normalizedEnd == null) || (isStart && isEnd);
+
+    bool inRange = false;
+    if (_isDateRange && normalizedEnd != null) {
+      if (normalizedDate.isAfter(normalizedStart) && normalizedDate.isBefore(normalizedEnd)) {
+        inRange = true;
+      }
+    }
+
+    bool isSelected = isStart || isEnd;
+
+    Widget cellContent = Center(
+      child: Text(
+        '${date.day}',
+        style: GoogleFonts.montserrat(
+          fontSize: 13,
+          fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+          color: isSelected ? Colors.white : (inRange ? _teal : _textDark),
+        ),
+      ),
+    );
+
+    if (isSingle && isSelected) {
+      return GestureDetector(
+        onTap: () => _onDateSelected(date),
+        child: Container(
+          margin: const EdgeInsets.all(6),
+          decoration: const BoxDecoration(
+            color: _teal,
+            shape: BoxShape.circle,
+          ),
+          child: cellContent,
+        ),
+      );
+    }
+
+    return GestureDetector(
+      onTap: () => _onDateSelected(date),
+      child: Stack(
+        children: [
+          if (inRange || (isSelected && !isSingle))
+            Positioned.fill(
+              top: 6,
+              bottom: 6,
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Container(
+                      color: (isEnd || inRange) ? _teal.withOpacity(0.15) : Colors.transparent,
+                    ),
+                  ),
+                  Expanded(
+                    child: Container(
+                      color: (isStart || inRange) ? _teal.withOpacity(0.15) : Colors.transparent,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          if (isSelected)
+            Container(
+              margin: const EdgeInsets.all(6),
+              decoration: const BoxDecoration(
+                color: _teal,
+                shape: BoxShape.circle,
+              ),
+              child: cellContent,
+            )
+          else
+            Container(
+              margin: const EdgeInsets.all(6),
+              child: cellContent,
+            ),
+        ],
+      ),
+    );
+  }
+
+  void _onDateSelected(DateTime date) {
+    setState(() {
+      if (!_isDateRange) {
+        _selectedDate = date;
+      } else {
+        if (_selectingStartDate) {
+          _selectedDate = date;
+          if (_selectedEndDate != null && _selectedDate.isAfter(_selectedEndDate!)) {
+            _selectedEndDate = _selectedDate.add(const Duration(days: 1));
+          }
+          _selectingStartDate = false;
+        } else {
+          _selectedEndDate = date;
+          if (_selectedDate.isAfter(_selectedEndDate!)) {
+            _selectedDate = _selectedEndDate!.subtract(const Duration(days: 1));
+          }
+        }
+      }
+    });
   }
 
   // ── Month & Year Tab ───────────────────────────────────────────
@@ -479,7 +849,15 @@ class _CustomFilterSheetState extends State<CustomFilterSheet>
 
     switch (_tabController.index) {
       case 0:
-        result = CustomFilterResult(type: 'date', date: _selectedDate);
+        if (_isDateRange) {
+          result = CustomFilterResult(
+            type: 'date_range',
+            date: _selectedDate,
+            endDate: _selectedEndDate ?? _selectedDate,
+          );
+        } else {
+          result = CustomFilterResult(type: 'date', date: _selectedDate);
+        }
         break;
       case 1:
         result = CustomFilterResult(

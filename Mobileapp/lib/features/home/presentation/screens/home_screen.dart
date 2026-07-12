@@ -188,6 +188,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   t.date.day == r.date!.day;
             }
             return true;
+          case 'date_range':
+            if (r.date != null && r.endDate != null) {
+              final txnDate = DateTime(t.date.year, t.date.month, t.date.day);
+              final startDate = DateTime(r.date!.year, r.date!.month, r.date!.day);
+              final endDate = DateTime(r.endDate!.year, r.endDate!.month, r.endDate!.day);
+              
+              return (txnDate.isAtSameMomentAs(startDate) || txnDate.isAfter(startDate)) &&
+                     (txnDate.isAtSameMomentAs(endDate) || txnDate.isBefore(endDate));
+            }
+            return true;
           case 'month_year':
             if (r.month != null && r.year != null) {
               return t.date.year == r.year && t.date.month == r.month;
