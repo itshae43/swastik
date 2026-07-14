@@ -1249,16 +1249,20 @@ class _DeviceVerificationScreenState
                 decoration: BoxDecoration(
                   color: isOtherDeviceSession
                       ? const Color(0xFFFFF2F2)
-                      : isPending
-                          ? const Color(0xFFFFF8E1)
-                          : const Color(0xFFECEFF1),
+                      : isMySession
+                          ? const Color(0xFFE8F5E9)
+                          : isPending
+                              ? const Color(0xFFFFF8E1)
+                              : const Color(0xFFECEFF1),
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(
                     color: isOtherDeviceSession
                         ? const Color(0xFFFFCDD2)
-                        : isPending
-                            ? const Color(0xFFFFECB3)
-                            : const Color(0xFFCFD8DC),
+                        : isMySession
+                            ? const Color(0xFFA5D6A7)
+                            : isPending
+                                ? const Color(0xFFFFECB3)
+                                : const Color(0xFFCFD8DC),
                     width: 1,
                   ),
                 ),
@@ -1271,9 +1275,11 @@ class _DeviceVerificationScreenState
                       decoration: BoxDecoration(
                         color: isOtherDeviceSession
                             ? const Color(0xFFD32F2F)
-                            : isPending
-                                ? const Color(0xFFFFB300)
-                                : const Color(0xFF78909C),
+                            : isMySession
+                                ? const Color(0xFF4CAF50)
+                                : isPending
+                                    ? const Color(0xFFFFB300)
+                                    : const Color(0xFF78909C),
                         shape: BoxShape.circle,
                       ),
                     ),
@@ -1281,17 +1287,21 @@ class _DeviceVerificationScreenState
                     Text(
                       isOtherDeviceSession
                           ? 'Status: Active Session (Locked)'
-                          : isPending
-                              ? 'Status: Pending Approval'
-                              : 'Status: Inactive',
+                          : isMySession
+                              ? 'Status: Active (This Device)'
+                              : isPending
+                                  ? 'Status: Pending Approval'
+                                  : 'Status: Inactive',
                       style: GoogleFonts.montserrat(
                         fontSize: isTablet ? 13 : 12,
                         fontWeight: FontWeight.bold,
                         color: isOtherDeviceSession
                             ? const Color(0xFFD32F2F)
-                            : isPending
-                                ? const Color(0xFF8B6C1C)
-                                : const Color(0xFF546E7A),
+                            : isMySession
+                                ? const Color(0xFF2E7D32)
+                                : isPending
+                                    ? const Color(0xFF8B6C1C)
+                                    : const Color(0xFF546E7A),
                       ),
                     ),
                   ],
@@ -1514,6 +1524,110 @@ class _DeviceVerificationScreenState
                     ),
                   ),
                 ],
+              ),
+            ),
+          ),
+        ] else if (isMySession) ...[
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              color: const Color(0xFFE8F5E9),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: const Color(0xFFA5D6A7), width: 1.5),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFC8E6C9),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.check_circle_rounded,
+                    color: Color(0xFF2E7D32),
+                    size: 18,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Active Session on This Device',
+                        style: GoogleFonts.montserrat(
+                          fontSize: isTablet ? 15 : 14,
+                          fontWeight: FontWeight.bold,
+                          color: const Color(0xFF2E7D32),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'You are already approved on this device. Resume without asking the admin again.',
+                        style: GoogleFonts.montserrat(
+                          fontSize: isTablet ? 13 : 12,
+                          fontWeight: FontWeight.w500,
+                          color: const Color(0xFF1B5E20),
+                          height: 1.4,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+          SizedBox(
+            width: double.infinity,
+            height: isTablet ? 64 : 56,
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(28),
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF2E6F40), Color(0xFF1E4620)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF1E4620).withValues(alpha: 0.25),
+                    blurRadius: 16,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
+              ),
+              child: ElevatedButton(
+                onPressed: () {
+                  _stopTimers();
+                  ref.read(authStateProvider.notifier).loginAsStaff(currentProfile);
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.transparent,
+                  shadowColor: Colors.transparent,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(28),
+                  ),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.login_rounded, color: Colors.white, size: isTablet ? 22 : 20),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Resume Session',
+                      style: GoogleFonts.montserrat(
+                        fontSize: isTablet ? 16 : 15,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),

@@ -33,7 +33,7 @@ class PartyService {
       } catch (e) {
         // Silently ignore network errors in polling
       }
-      await Future.delayed(const Duration(seconds: 3));
+      await Future.delayed(const Duration(seconds: 12));
     }
   }
 

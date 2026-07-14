@@ -3,6 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:swastik_mobile_app/core/services/notification_service.dart';
 import 'package:swastik_mobile_app/core/utils/responsive_utils.dart';
 import 'package:swastik_mobile_app/features/reminders/providers/reminder_navigation_provider.dart';
+import 'package:swastik_mobile_app/features/ledger/providers/transaction_providers.dart';
+import 'package:swastik_mobile_app/features/ledger/providers/realtime_sync_provider.dart';
+import 'package:swastik_mobile_app/features/parties/providers/party_providers.dart';
 
 import '../../../home/presentation/screens/home_screen.dart';
 import '../../../entries/presentation/screens/entries_screen.dart';
@@ -60,12 +63,17 @@ class _MainScreenState extends ConsumerState<MainScreen>
         _notificationNavigationHandler,
       );
       NotificationService().repairSchedulesFromServer(force: true);
+      // Start the realtime data listener so entries made on any device appear
+      // here live (for both admin and staff — MainScreen only mounts once
+      // authenticated).
+      ref.read(realtimeSyncProvider.notifier).start();
     });
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    ref.read(realtimeSyncProvider.notifier).stop();
     NotificationService().clearNavigationHandler(
       _notificationNavigationHandler,
     );
@@ -77,6 +85,15 @@ class _MainScreenState extends ConsumerState<MainScreen>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       NotificationService().repairSchedulesFromServer(force: true);
+      // The polling streams can be throttled/paused while the app is in the
+      // background, leaving stale data on return. Force an immediate refetch so
+      // the admin/staff sees the latest entries the moment they reopen the app.
+      ref.invalidate(transactionsStreamProvider);
+      ref.invalidate(dailyBalancesStreamProvider);
+      ref.invalidate(partiesStreamProvider);
+      // The SSE socket is often silently killed while backgrounded — re-establish
+      // it so live updates resume immediately.
+      ref.read(realtimeSyncProvider.notifier).reconnect();
     }
   }
 

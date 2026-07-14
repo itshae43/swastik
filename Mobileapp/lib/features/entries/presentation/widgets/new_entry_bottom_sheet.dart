@@ -185,30 +185,45 @@ class _NewEntryBottomSheetState extends State<NewEntryBottomSheet> {
               style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.black54),
             ),
             const SizedBox(height: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.grey.shade300),
-              ),
-              child: DropdownButtonHideUnderline(
-                child: DropdownButton<String>(
-                  value: _itemCategory,
-                  isExpanded: true,
-                  icon: const Icon(Icons.keyboard_arrow_down, color: Colors.black54),
-                  items: ['22K Gold Jewellery', '18K Gold', '24K Gold', 'Silver'].map((String value) {
-                    return DropdownMenuItem<String>(
-                      value: value,
-                      child: Text(value),
-                    );
-                  }).toList(),
-                  onChanged: (newValue) {
-                    if (newValue != null) {
-                      setState(() => _itemCategory = newValue);
-                    }
-                  },
-                ),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: ['22K Gold Jewellery', '18K Gold', '24K Gold', 'Silver'].map((String value) {
+                  final isSelected = _itemCategory == value;
+                  return GestureDetector(
+                    onTap: () => setState(() => _itemCategory = value),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      margin: const EdgeInsets.only(right: 12),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: isSelected ? const Color(0xFFD4B139).withOpacity(0.15) : Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: isSelected ? const Color(0xFFD4B139) : Colors.grey.shade300,
+                          width: isSelected ? 1.5 : 1,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (isSelected) ...[
+                            const Icon(Icons.check_circle, color: Color(0xFFD4B139), size: 16),
+                            const SizedBox(width: 6),
+                          ],
+                          Text(
+                            value,
+                            style: TextStyle(
+                              color: isSelected ? const Color(0xFF8A7311) : Colors.black87,
+                              fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }).toList(),
               ),
             ),
             const SizedBox(height: 20),

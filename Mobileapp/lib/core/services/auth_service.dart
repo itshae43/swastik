@@ -137,31 +137,35 @@ class AuthService {
     return null;
   }
 
-  /// POST /api/user-profiles/verify-session — check if this device has a valid staff session
+  /// POST /api/user-profiles/verify-session — check if this device has a valid staff session.
+  ///
+  /// Three outcomes, deliberately NOT collapsed into one:
+  ///  - returns the session data  → session is valid.
+  ///  - returns null              → server EXPLICITLY said no valid session (HTTP 200, valid:false).
+  ///  - throws                    → inconclusive (timeout / no network / 5xx / 503 while the DB
+  ///                                 reconnects). The caller must NOT treat this as "logged out".
   Future<Map<String, dynamic>?> verifyStaffSession(String androidId) async {
-    try {
-      final url = '$baseUrl/user-profiles/verify-session';
-      debugPrint('[AuthService] POST $url');
-      final response = await http.post(
-        Uri.parse(url),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'androidId': androidId}),
-      ).timeout(const Duration(seconds: 15));
+    final url = '$baseUrl/user-profiles/verify-session';
+    debugPrint('[AuthService] POST $url');
+    final response = await http.post(
+      Uri.parse(url),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'androidId': androidId}),
+    ).timeout(const Duration(seconds: 15));
 
-      debugPrint('[AuthService] verify-session status: ${response.statusCode}');
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        if (data['valid'] == true) {
-          debugPrint('[AuthService] Valid staff session found');
-          return data;
-        }
+    debugPrint('[AuthService] verify-session status: ${response.statusCode}');
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      if (data['valid'] == true) {
+        debugPrint('[AuthService] Valid staff session found');
+        return data;
       }
-      debugPrint('[AuthService] No valid staff session');
-      return null;
-    } catch (e) {
-      debugPrint('[AuthService] Error in verifyStaffSession: $e');
-      return null;
+      debugPrint('[AuthService] Server reports no valid staff session');
+      return null; // authoritative "invalid"
     }
+    // Any non-200 (incl. 503 while Mongo reconnects) is inconclusive → let the
+    // caller keep the saved session and retry rather than logging the user out.
+    throw Exception('verify-session inconclusive (status ${response.statusCode})');
   }
 }
 

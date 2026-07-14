@@ -48,6 +48,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     _searchFocusNode.addListener(() {
       setState(() {});
     });
+    // Push the initial filter ('Today') to the server-side table provider once
+    // the first frame is ready so it fetches only today's window, not everything.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _syncFilterToProvider();
+    });
   }
 
   @override
@@ -57,13 +62,116 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     super.dispose();
   }
 
+  /// Translates the current filter selection into a server query and pushes it
+  /// to [homeTxnQueryProvider]. Date filters use a ±1 day padded window (the
+  /// UI's [_applyDateFilter] trims to the exact days, so padding is safe and
+  /// immune to any timezone edge at the day boundary); 'All' pages in batches.
+  void _syncFilterToProvider() {
+    ref.read(homeTransactionsProvider.notifier).setQuery(_computeQuery());
+  }
+
+  HomeTxnQuery _computeQuery() {
+    final now = TimeUtils.now;
+    DateTime dayStart(DateTime d) => DateTime(d.year, d.month, d.day);
+    const pad = Duration(days: 1);
+
+    switch (_selectedTableFilter) {
+      case 'Today':
+        final s = dayStart(now);
+        return HomeTxnQuery(from: s.subtract(pad), to: s.add(pad + pad));
+      case 'This Week':
+        final startOfWeek = dayStart(now.subtract(Duration(days: now.weekday - 1)));
+        return HomeTxnQuery(
+          from: startOfWeek.subtract(pad),
+          to: dayStart(now).add(pad + pad),
+        );
+      case 'This Month':
+        final startOfMonth = DateTime(now.year, now.month, 1);
+        final startOfNextMonth = DateTime(now.year, now.month + 1, 1);
+        return HomeTxnQuery(
+          from: startOfMonth.subtract(pad),
+          to: startOfNextMonth.add(pad),
+        );
+      case 'Custom':
+        final r = _customFilterResult;
+        if (r != null) {
+          if (r.type == 'date' && r.date != null) {
+            final s = dayStart(r.date!);
+            return HomeTxnQuery(from: s.subtract(pad), to: s.add(pad + pad));
+          }
+          if (r.type == 'date_range' && r.date != null && r.endDate != null) {
+            return HomeTxnQuery(
+              from: dayStart(r.date!).subtract(pad),
+              to: dayStart(r.endDate!).add(pad + pad),
+            );
+          }
+          if (r.type == 'month_year' && r.month != null && r.year != null) {
+            final startOfMonth = DateTime(r.year!, r.month!, 1);
+            final startOfNextMonth = DateTime(r.year!, r.month! + 1, 1);
+            return HomeTxnQuery(
+              from: startOfMonth.subtract(pad),
+              to: startOfNextMonth.add(pad),
+            );
+          }
+        }
+        // 'month_only' (all years) and any incomplete custom selection can't be
+        // expressed as a single date window — fall back to loading everything.
+        return const HomeTxnQuery(all: true);
+      case 'All':
+      default:
+        return const HomeTxnQuery(all: true);
+    }
+  }
+
+  /// Adapts the paginated [HomeTxnState] to the [AsyncValue] shape the existing
+  /// table widgets already consume, so their loading/empty/data branches keep
+  /// working unchanged. Last-good data is preserved during background refreshes.
+  AsyncValue<List<TransactionModel>> _asAsync(HomeTxnState s) {
+    if (s.error != null && s.items.isEmpty) {
+      return AsyncError(s.error!, StackTrace.current);
+    }
+    if (s.isLoading && s.items.isEmpty) {
+      return const AsyncValue.loading();
+    }
+    return AsyncData(s.items);
+  }
+
+  /// "Load more" control shown under the table when more "All" batches exist.
+  Widget _buildLoadMoreButton(HomeTxnState txState) {
+    if (!txState.hasMore) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Center(
+        child: TextButton.icon(
+          onPressed: txState.isLoadingMore
+              ? null
+              : () => ref.read(homeTransactionsProvider.notifier).loadMore(),
+          icon: txState.isLoadingMore
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.expand_more_rounded, size: 18),
+          label: Text(
+            txState.isLoadingMore ? 'Loading…' : 'Load more',
+            style: GoogleFonts.montserrat(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: const Color(0xFF735C0F),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> _handleRefresh() async {
-    ref.invalidate(transactionsStreamProvider);
     ref.invalidate(partiesStreamProvider);
-    ref.invalidate(dailyBalancesStreamProvider);
+    ref.invalidate(latestDailyBalanceProvider);
     try {
       await Future.wait([
-        ref.read(transactionsStreamProvider.future),
+        ref.read(homeTransactionsProvider.notifier).refresh(),
         ref.read(partiesStreamProvider.future),
       ]).timeout(const Duration(milliseconds: 800));
     } catch (_) {
@@ -145,6 +253,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         _selectedTableFilter = 'Custom';
         _customFilterResult = result;
       });
+      _syncFilterToProvider();
     }
   }
 
@@ -219,42 +328,22 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final isTablet = AppResponsive.isTablet(context);
-    final transactionsAsync = ref.watch(transactionsStreamProvider);
-    final transactions = transactionsAsync.value ?? [];
 
-    // Calculate balances dynamically
-    double cashVal = 0.0;
-    double onlineVal = 0.0;
-    double goldVal = 0.0;
-    double diamondVal = 0.0;
+    // Home table data now comes from the server-side filtered / batched provider
+    // (only the current window is fetched), adapted to the AsyncValue shape the
+    // table widgets already consume.
+    final txState = ref.watch(homeTransactionsProvider);
+    final transactionsAsync = _asAsync(txState);
 
-    for (final t in transactions) {
-      final isCredit =
-          t.type == TransactionType.receipt ||
-          t.type == TransactionType.metalIn;
-      final isDebit =
-          t.type == TransactionType.payment ||
-          t.type == TransactionType.metalOut;
-      final val = t.metalType.isEmpty ? t.cashAmount : t.metalWeight;
-
-      if (t.metalType.isEmpty) {
-        if (t.paymentMode == PaymentMode.cash) {
-          if (isCredit) cashVal += val;
-          if (isDebit) cashVal -= val;
-        } else if (t.paymentMode == PaymentMode.online ||
-            t.paymentMode == PaymentMode.upi ||
-            t.paymentMode == PaymentMode.rtgs) {
-          if (isCredit) onlineVal += val;
-          if (isDebit) onlineVal -= val;
-        }
-      } else if (t.metalType == 'gold') {
-        if (isCredit) goldVal += val;
-        if (isDebit) goldVal -= val;
-      } else if (t.metalType == 'diamond') {
-        if (isCredit) diamondVal += val;
-        if (isDebit) diamondVal -= val;
-      }
-    }
+    // Summary cards show the all-time running totals. These are read from the
+    // latest server-computed daily-closing-balance row (a single lightweight
+    // document) instead of re-summing every transaction on the device — so the
+    // cards no longer need the full transaction history downloaded to the phone.
+    final latestBalance = ref.watch(latestDailyBalanceProvider).value;
+    final double cashVal = latestBalance?.closingCash ?? 0.0;
+    final double onlineVal = latestBalance?.closingOnline ?? 0.0;
+    final double goldVal = latestBalance?.closingGold ?? 0.0;
+    final double diamondVal = latestBalance?.closingDiamond ?? 0.0;
 
     final String displayCash =
         '₹ ${NumberFormat.decimalPattern('en_IN').format(cashVal)}';
@@ -743,6 +832,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   Widget _buildTabletTransactionsTable(
     AsyncValue<List<TransactionModel>> transactionsAsync,
   ) {
+    final txState = ref.watch(homeTransactionsProvider);
     final transactions = transactionsAsync.value ?? [];
 
     // 1. Date filter (uses shared _applyDateFilter)
@@ -894,6 +984,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                               _selectedTableFilter = value;
                               _customFilterResult = null;
                             });
+                            _syncFilterToProvider();
                           }
                         },
                         itemBuilder: (context) => [
@@ -1591,6 +1682,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       );
                     },
                   ),
+                  _buildLoadMoreButton(txState),
                 ],
               );
             },
@@ -1935,10 +2027,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   Widget _buildRecentTransactions() {
-    final transactionsAsync = ref.watch(transactionsStreamProvider);
+    final txState = ref.watch(homeTransactionsProvider);
+    final transactionsAsync = _asAsync(txState);
     final transactions = transactionsAsync.value ?? [];
 
-    // 1. Apply the shared date filter
+    // 1. Apply the shared date filter (trims the padded server window to the
+    //    exact selected days; a no-op for the 'All' filter).
     final dateFilteredTransactions = _applyDateFilter(transactions);
 
     // 2. Apply search query filter
@@ -2025,6 +2119,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     _selectedTableFilter = value;
                     _customFilterResult = null;
                   });
+                  _syncFilterToProvider();
                 }
               },
               itemBuilder: (context) => [
@@ -2424,6 +2519,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           loading: () => const Center(child: CircularProgressIndicator()),
           error: (e, _) => Center(child: Text('Error loading transactions')),
         ),
+        _buildLoadMoreButton(txState),
       ],
     );
   }

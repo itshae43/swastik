@@ -2,9 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/transaction_model.dart';
-import '../models/party_model.dart';
 import '../models/daily_closing_balance_model.dart';
-import '../utils/time_utils.dart';
 import 'package:swastik_mobile_app/core/utils/device_identity.dart';
 import 'package:swastik_mobile_app/features/auth/providers/auth_providers.dart';
 import 'package:swastik_mobile_app/core/utils/constants.dart';
@@ -32,64 +30,8 @@ class TransactionService {
   }
 
   Future<void> createTransaction(TransactionModel transaction) async {
-    // 1. Fetch Party and update balance
-    try {
-      final allPartiesRes = await http.get(
-        Uri.parse('$baseUrl/parties'),
-        headers: _getHeaders(),
-      ).timeout(const Duration(seconds: 30));
-      if (allPartiesRes.statusCode == 200) {
-        final List allParties = jsonDecode(allPartiesRes.body);
-        final partyMap = allParties.firstWhere((p) => p['_id'] == transaction.partyId, orElse: () => null);
-        if (partyMap != null) {
-          final party = PartyModel.fromMap(partyMap['_id'], partyMap);
-
-          double cashBalance = party.cashBalance;
-          double goldBalance = party.goldBalanceGrams;
-          double diamondBalance = party.diamondBalanceCarats;
-
-          final isDebit = transaction.type == TransactionType.payment ||
-              transaction.type == TransactionType.sale ||
-              transaction.type == TransactionType.metalOut;
-
-          final isCredit = transaction.type == TransactionType.receipt ||
-              transaction.type == TransactionType.purchase ||
-              transaction.type == TransactionType.metalIn ||
-              transaction.type == TransactionType.return_;
-
-          if (transaction.metalType.isEmpty) {
-            if (isDebit) cashBalance += transaction.cashAmount;
-            if (isCredit) cashBalance -= transaction.cashAmount;
-          } else if (transaction.metalType == 'gold') {
-            if (isDebit) goldBalance += transaction.metalWeight;
-            if (isCredit) goldBalance -= transaction.metalWeight;
-          } else if (transaction.metalType == 'diamond') {
-            if (isDebit) diamondBalance += transaction.metalWeight;
-            if (isCredit) diamondBalance -= transaction.metalWeight;
-          }
-
-          final updatedParty = party.copyWith(
-            cashBalance: cashBalance,
-            goldBalanceGrams: goldBalance,
-            diamondBalanceCarats: diamondBalance,
-            updatedAt: TimeUtils.now,
-          );
-
-          final response = await http.put(
-            Uri.parse('$baseUrl/parties/${party.id}'),
-            headers: _getHeaders(),
-            body: jsonEncode(updatedParty.toMap()),
-          ).timeout(const Duration(seconds: 30));
-          if (response.statusCode != 200 && response.statusCode != 201) {
-            throw Exception('Failed to update party balance');
-          }
-        }
-      }
-    } catch (e) {
-      // Log party balance adjustment failure but proceed to try creating transaction
-    }
-
-    // 2. Create Transaction
+    // The server applies the party-balance impact atomically ($inc) when the
+    // transaction is created, so the client only needs to POST the transaction.
     final response = await http.post(
       Uri.parse('$baseUrl/transactions'),
       headers: _getHeaders(),
@@ -102,66 +44,8 @@ class TransactionService {
   }
 
   Future<void> deleteTransaction(TransactionModel transaction) async {
-    // 1. Fetch Party and reverse balance impact
-    try {
-      final allPartiesRes = await http.get(
-        Uri.parse('$baseUrl/parties'),
-        headers: _getHeaders(),
-      ).timeout(const Duration(seconds: 30));
-      if (allPartiesRes.statusCode == 200) {
-        final List allParties = jsonDecode(allPartiesRes.body);
-        final partyMap = allParties.firstWhere((p) => p['_id'] == transaction.partyId, orElse: () => null);
-        if (partyMap != null) {
-          final party = PartyModel.fromMap(partyMap['_id'], partyMap);
-
-          double cashBalance = party.cashBalance;
-          double goldBalance = party.goldBalanceGrams;
-          double diamondBalance = party.diamondBalanceCarats;
-
-          final isDebit = transaction.type == TransactionType.payment ||
-              transaction.type == TransactionType.sale ||
-              transaction.type == TransactionType.metalOut;
-
-          final isCredit = transaction.type == TransactionType.receipt ||
-              transaction.type == TransactionType.purchase ||
-              transaction.type == TransactionType.metalIn ||
-              transaction.type == TransactionType.return_;
-
-          // Reversing the transaction impact:
-          // Subtract debits, add credits
-          if (transaction.metalType.isEmpty) {
-            if (isDebit) cashBalance -= transaction.cashAmount;
-            if (isCredit) cashBalance += transaction.cashAmount;
-          } else if (transaction.metalType == 'gold') {
-            if (isDebit) goldBalance -= transaction.metalWeight;
-            if (isCredit) goldBalance += transaction.metalWeight;
-          } else if (transaction.metalType == 'diamond') {
-            if (isDebit) diamondBalance -= transaction.metalWeight;
-            if (isCredit) diamondBalance += transaction.metalWeight;
-          }
-
-          final updatedParty = party.copyWith(
-            cashBalance: cashBalance,
-            goldBalanceGrams: goldBalance,
-            diamondBalanceCarats: diamondBalance,
-            updatedAt: TimeUtils.now,
-          );
-
-          final response = await http.put(
-            Uri.parse('$baseUrl/parties/${party.id}'),
-            headers: _getHeaders(),
-            body: jsonEncode(updatedParty.toMap()),
-          ).timeout(const Duration(seconds: 30));
-          if (response.statusCode != 200 && response.statusCode != 201) {
-            throw Exception('Failed to update party balance');
-          }
-        }
-      }
-    } catch (e) {
-      // Proceed even if balance adjustment fails
-    }
-
-    // 2. Delete Transaction
+    // The server reverses the party-balance impact atomically ($inc) when the
+    // transaction is deleted, so the client only needs to DELETE it.
     final response = await http.delete(
       Uri.parse('$baseUrl/transactions/${transaction.id}'),
       headers: _getHeaders(),
@@ -173,86 +57,8 @@ class TransactionService {
   }
 
   Future<void> updateTransaction(TransactionModel oldTx, TransactionModel newTx) async {
-    // 1. Fetch Party and update balance differences
-    try {
-      final allPartiesRes = await http.get(
-        Uri.parse('$baseUrl/parties'),
-        headers: _getHeaders(),
-      ).timeout(const Duration(seconds: 30));
-      if (allPartiesRes.statusCode == 200) {
-        final List allParties = jsonDecode(allPartiesRes.body);
-        final partyMap = allParties.firstWhere((p) => p['_id'] == oldTx.partyId, orElse: () => null);
-        if (partyMap != null) {
-          final party = PartyModel.fromMap(partyMap['_id'], partyMap);
-
-          double cashBalance = party.cashBalance;
-          double goldBalance = party.goldBalanceGrams;
-          double diamondBalance = party.diamondBalanceCarats;
-
-          // A. Reverse old transaction impact: Subtract debits, add credits
-          final wasDebit = oldTx.type == TransactionType.payment ||
-              oldTx.type == TransactionType.sale ||
-              oldTx.type == TransactionType.metalOut;
-
-          final wasCredit = oldTx.type == TransactionType.receipt ||
-              oldTx.type == TransactionType.purchase ||
-              oldTx.type == TransactionType.metalIn ||
-              oldTx.type == TransactionType.return_;
-
-          if (oldTx.metalType.isEmpty) {
-            if (wasDebit) cashBalance -= oldTx.cashAmount;
-            if (wasCredit) cashBalance += oldTx.cashAmount;
-          } else if (oldTx.metalType == 'gold') {
-            if (wasDebit) goldBalance -= oldTx.metalWeight;
-            if (wasCredit) goldBalance += oldTx.metalWeight;
-          } else if (oldTx.metalType == 'diamond') {
-            if (wasDebit) diamondBalance -= oldTx.metalWeight;
-            if (wasCredit) diamondBalance += oldTx.metalWeight;
-          }
-
-          // B. Apply new transaction impact: Add debits, subtract credits
-          final isDebit = newTx.type == TransactionType.payment ||
-              newTx.type == TransactionType.sale ||
-              newTx.type == TransactionType.metalOut;
-
-          final isCredit = newTx.type == TransactionType.receipt ||
-              newTx.type == TransactionType.purchase ||
-              newTx.type == TransactionType.metalIn ||
-              newTx.type == TransactionType.return_;
-
-          if (newTx.metalType.isEmpty) {
-            if (isDebit) cashBalance += newTx.cashAmount;
-            if (isCredit) cashBalance -= newTx.cashAmount;
-          } else if (newTx.metalType == 'gold') {
-            if (isDebit) goldBalance += newTx.metalWeight;
-            if (isCredit) goldBalance -= newTx.metalWeight;
-          } else if (newTx.metalType == 'diamond') {
-            if (isDebit) diamondBalance += newTx.metalWeight;
-            if (isCredit) diamondBalance -= newTx.metalWeight;
-          }
-
-          final updatedParty = party.copyWith(
-            cashBalance: cashBalance,
-            goldBalanceGrams: goldBalance,
-            diamondBalanceCarats: diamondBalance,
-            updatedAt: TimeUtils.now,
-          );
-
-          final response = await http.put(
-            Uri.parse('$baseUrl/parties/${party.id}'),
-            headers: _getHeaders(),
-            body: jsonEncode(updatedParty.toMap()),
-          ).timeout(const Duration(seconds: 30));
-          if (response.statusCode != 200 && response.statusCode != 201) {
-            throw Exception('Failed to update party balance');
-          }
-        }
-      }
-    } catch (e) {
-      // Proceed even if balance adjustment fails
-    }
-
-    // 2. Update Transaction
+    // The server reverses the old impact and applies the new one atomically
+    // ($inc) when the transaction is updated, so the client only needs to PUT it.
     final response = await http.put(
       Uri.parse('$baseUrl/transactions/${newTx.id}'),
       headers: _getHeaders(),
@@ -262,6 +68,49 @@ class TransactionService {
     if (response.statusCode != 200 && response.statusCode != 201) {
       throw Exception('Failed to update transaction');
     }
+  }
+
+  /// Fetches a filtered / paginated batch of transactions from the server.
+  ///
+  /// Every argument is optional. With no arguments this returns the full
+  /// collection (newest first), matching the legacy behaviour. Providing
+  /// [from]/[to] scopes to a date window, [partyId] to one party, and
+  /// [limit]/[skip] pulls a single batch for infinite-scroll style loading.
+  ///
+  /// Dates are serialised exactly like [TransactionModel.toMap] (UTC ISO of the
+  /// app's internal time space) so the bounds line up with the stored `date`
+  /// field regardless of the device timezone.
+  Future<List<TransactionModel>> fetchTransactions({
+    String? partyId,
+    DateTime? from,
+    DateTime? to,
+    int? limit,
+    int? skip,
+  }) async {
+    final params = <String, String>{};
+    if (partyId != null && partyId.isNotEmpty) params['partyId'] = partyId;
+    if (from != null) params['from'] = from.toUtc().toIso8601String();
+    if (to != null) params['to'] = to.toUtc().toIso8601String();
+    if (limit != null) params['limit'] = '$limit';
+    if (skip != null) params['skip'] = '$skip';
+
+    final uri = Uri.parse('$baseUrl/transactions')
+        .replace(queryParameters: params.isEmpty ? null : params);
+
+    final res = await http
+        .get(uri, headers: _getHeaders())
+        .timeout(const Duration(seconds: 15));
+
+    if (res.statusCode != 200) {
+      throw Exception('Failed to load transactions (${res.statusCode})');
+    }
+    final List data = jsonDecode(res.body);
+    final list = data
+        .map((e) =>
+            TransactionModel.fromMap(e['_id'], e as Map<String, dynamic>))
+        .toList();
+    list.sort((a, b) => b.date.compareTo(a.date));
+    return list;
   }
 
   Stream<List<TransactionModel>> transactionsStream(String userId) async* {
@@ -277,27 +126,47 @@ class TransactionService {
           list.sort((a, b) => b.date.compareTo(a.date));
           yield list;
         }
-      } catch (e) {}
-      await Future.delayed(const Duration(seconds: 3));
+      } catch (e) {
+        // Keep the polling stream alive; the next cycle will retry.
+      }
+      await Future.delayed(const Duration(seconds: 12));
     }
   }
 
   Stream<List<TransactionModel>> partyTransactionsStream(String userId, String partyId) async* {
+    // Filter by partyId on the server (uses the {partyId, date} index) instead of
+    // downloading every transaction and filtering on the device each cycle.
     while (true) {
       try {
-        final res = await http.get(
-          Uri.parse('$baseUrl/transactions'),
-          headers: _getHeaders(),
-        ).timeout(const Duration(seconds: 10));
+        yield await fetchTransactions(partyId: partyId);
+      } catch (e) {
+        // Keep the polling stream alive; the next cycle will retry.
+      }
+      await Future.delayed(const Duration(seconds: 12));
+    }
+  }
+
+  /// Polls just the latest closing-balance row (current running totals) for the
+  /// home summary cards — a single tiny document instead of the whole history.
+  Stream<DailyClosingBalanceModel?> latestDailyBalanceStream() async* {
+    while (true) {
+      try {
+        final res = await http
+            .get(
+              Uri.parse('$baseUrl/daily-balances/latest'),
+              headers: _getHeaders(),
+            )
+            .timeout(const Duration(seconds: 10));
         if (res.statusCode == 200) {
-          final List data = jsonDecode(res.body);
-          final list = data.map((e) => TransactionModel.fromMap(e['_id'], e as Map<String, dynamic>)).toList();
-          final filtered = list.where((t) => t.partyId == partyId).toList();
-          filtered.sort((a, b) => b.date.compareTo(a.date));
-          yield filtered;
+          final dynamic data = jsonDecode(res.body);
+          yield data == null
+              ? null
+              : DailyClosingBalanceModel.fromMap(data as Map<String, dynamic>);
         }
-      } catch (e) {}
-      await Future.delayed(const Duration(seconds: 3));
+      } catch (e) {
+        // Keep the polling stream alive; the next cycle will retry.
+      }
+      await Future.delayed(const Duration(seconds: 12));
     }
   }
 
@@ -313,8 +182,10 @@ class TransactionService {
           final list = data.map((e) => DailyClosingBalanceModel.fromMap(e as Map<String, dynamic>)).toList();
           yield list;
         }
-      } catch (e) {}
-      await Future.delayed(const Duration(seconds: 3));
+      } catch (e) {
+        // Keep the polling stream alive; the next cycle will retry.
+      }
+      await Future.delayed(const Duration(seconds: 12));
     }
   }
 }

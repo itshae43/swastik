@@ -23,14 +23,43 @@ const MONGO_URI = process.env.MONGO_URI || '';
 app.use(cors());
 app.use(express.json());
 
+// Escape a user-supplied string so it can be safely used as an exact,
+// case-insensitive regex match (prevents regex injection / ReDoS from headers).
+function escapeRegex(input: string): string {
+  return input.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+// Staff sessions expire at the shop's daily closing time (IST). A session
+// approved at/after closing lasts until the NEXT day's closing — no short
+// evening window. Change SESSION_CLOSING_HOUR_IST to move the daily cutoff.
+const SESSION_CLOSING_HOUR_IST = 21; // 9 PM IST
+
+function computeSessionExpiry(now: Date = new Date()): Date {
+  const istOffsetMs = 5.5 * 60 * 60 * 1000;
+  const istNow = new Date(now.getTime() + istOffsetMs);
+  const closingIST = new Date(istNow);
+  closingIST.setUTCHours(SESSION_CLOSING_HOUR_IST, 0, 0, 0);
+  // If we're already at/after today's closing time, roll to tomorrow's closing.
+  if (istNow.getTime() >= closingIST.getTime()) {
+    closingIST.setUTCDate(closingIST.getUTCDate() + 1);
+  }
+  // Convert the IST closing instant back to UTC for storage.
+  return new Date(closingIST.getTime() - istOffsetMs);
+}
+
 // Server-Sent Events (SSE) clients
 let sseClients: Response[] = [];
 
+// Generic helper to push a named SSE event to every connected client.
+function broadcastEvent(event: string) {
+  sseClients.forEach(client => {
+    client.write(`event: ${event}\ndata: {}\n\n`);
+  });
+}
+
 // Helper to broadcast profile updates
 function broadcastProfilesUpdated() {
-  sseClients.forEach(client => {
-    client.write('event: profiles_updated\ndata: {}\n\n');
-  });
+  broadcastEvent('profiles_updated');
 }
 
 // In-Memory/Local Admin records as fallback if MongoDB is not connected
@@ -79,10 +108,34 @@ mongoose
     console.error('================================================================');
     console.error('WARNING: MongoDB connection failed (bad credentials or network)');
     console.error('Error details:', err.message);
-    console.error('FALLBACK: The server will use in-memory mock database for testing.');
+    console.error('The server will reject data requests with 503 until MongoDB is reachable.');
     console.error('================================================================');
     isMongoConnected = false;
   });
+
+// Keep isMongoConnected accurate across mid-life disconnects/reconnects so the
+// guard below flips to 503 (rather than serving stale/placeholder data) the
+// moment the DB drops, and recovers automatically when it comes back.
+mongoose.connection.on('disconnected', () => {
+  isMongoConnected = false;
+  console.warn('[MONGO] Disconnected — data routes will return 503 until reconnected.');
+});
+mongoose.connection.on('reconnected', () => {
+  isMongoConnected = true;
+  console.log('[MONGO] Reconnected — data routes restored.');
+});
+
+// Fail closed: while MongoDB is unavailable (startup window or a dropped
+// connection), reject data requests with 503 so clients RETRY instead of
+// receiving empty/placeholder data and treating it as "logged out / no data".
+// Health and time stay open for monitoring and clock sync.
+app.use((req: Request, res: Response, next: NextFunction) => {
+  if (isMongoConnected) return next();
+  if (req.path === '/api/health' || req.path === '/api/time') return next();
+  return res.status(503).json({
+    error: 'Service temporarily unavailable: database not connected. Please retry shortly.',
+  });
+});
 
 // Seed default UserProfile if none exists
 async function seedUserProfile() {
@@ -120,39 +173,6 @@ async function seedUserProfile() {
   }
 }
 
-// Seed default Admin user if none exists (disabled)
-async function seedAdmin() {
-  try {
-    const adminCount = await Admin.countDocuments();
-    if (adminCount === 0) {
-      console.log('No admins found in database. Seeding default admin...');
-      const defaultAdmin = new Admin({
-        brand: 'google',
-        model: 'Pixel Tablet',
-        androidId: 'd0b41708a4f50758',
-      });
-      await defaultAdmin.save();
-      console.log('Default admin seeded successfully:', defaultAdmin);
-    } else {
-      const exists = await Admin.findOne({ androidId: 'd0b41708a4f50758' });
-      if (!exists) {
-        console.log('Default target admin not found. Creating it...');
-        const targetAdmin = new Admin({
-          brand: 'google',
-          model: 'Pixel Tablet',
-          androidId: 'd0b41708a4f50758',
-        });
-        await targetAdmin.save();
-        console.log('Target admin seeded:', targetAdmin);
-      } else {
-        console.log('Target admin already exists in database.');
-      }
-    }
-  } catch (error) {
-    console.error('Error seeding database:', error);
-  }
-}
-
 // Verification Endpoint
 app.post('/api/verify', async (req: Request, res: Response) => {
   try {
@@ -184,8 +204,8 @@ app.post('/api/verify', async (req: Request, res: Response) => {
 
       // Query database for matching brand and androidId (case-insensitive for brand)
       const matchingAdmin = await Admin.findOne({
-        androidId: { $regex: new RegExp(`^${androidId}$`, 'i') },
-        brand: { $regex: new RegExp(`^${brand}$`, 'i') },
+        androidId: { $regex: new RegExp(`^${escapeRegex(androidId)}$`, 'i') },
+        brand: { $regex: new RegExp(`^${escapeRegex(brand)}$`, 'i') },
       });
 
       if (matchingAdmin) {
@@ -335,7 +355,7 @@ app.delete('/api/devices/:id', async (req: Request, res: Response) => {
     // Also deauthorize/delete from Admin collection to trigger real logout on that device if id matches an admin
     if (isMongoConnected) {
       const deletedAdmin = await Admin.findOneAndDelete({
-        androidId: { $regex: new RegExp(`^${id}$`, 'i') },
+        androidId: { $regex: new RegExp(`^${escapeRegex(id)}$`, 'i') },
       });
       if (deletedAdmin) {
          console.log(`Deauthorized admin device ${id} via session deletion:`, deletedAdmin);
@@ -353,8 +373,6 @@ app.delete('/api/devices/:id', async (req: Request, res: Response) => {
     }
 
     return res.status(404).json({ error: 'Device session not found.' });
-
-    res.json({ success: true, message: 'Device logged out successfully.' });
   } catch (error: any) {
     console.error('Error in DELETE /api/devices/:id:', error);
     res.status(500).json({ error: 'Server error deleting device session.' });
@@ -614,19 +632,8 @@ app.post('/api/user-profiles/:id/approve', async (req: Request, res: Response) =
       profile.pendingDeviceBrand = null;
       profile.pendingDeviceModel = null;
 
-      // Expiry Logic: 8 PM IST or 10 mins
-      const now = new Date();
-      const istOffsetMs = 5.5 * 60 * 60 * 1000;
-      const istTime = new Date(now.getTime() + istOffsetMs);
-      let expiresAt: Date;
-
-      if (istTime.getUTCHours() < 21) {
-        const ist9PM = new Date(istTime);
-        ist9PM.setUTCHours(21, 0, 0, 0);
-        expiresAt = new Date(ist9PM.getTime() - istOffsetMs);
-      } else {
-        expiresAt = new Date(now.getTime() + 10 * 60 * 1000);
-      }
+      // Session expires at the shop's daily closing time (see computeSessionExpiry).
+      const expiresAt = computeSessionExpiry(new Date());
       profile.expiresAt = expiresAt;
 
       const updated = await profile.save();
@@ -650,20 +657,10 @@ app.post('/api/user-profiles/:id/approve', async (req: Request, res: Response) =
       profile.pendingDeviceBrand = null;
       profile.pendingDeviceModel = null;
 
-      const now = new Date();
-      const istOffsetMs = 5.5 * 60 * 60 * 1000;
-      const istTime = new Date(now.getTime() + istOffsetMs);
-      let expiresAt: Date;
-
-      if (istTime.getUTCHours() < 21) {
-        const ist9PM = new Date(istTime);
-        ist9PM.setUTCHours(21, 0, 0, 0);
-        expiresAt = new Date(ist9PM.getTime() - istOffsetMs);
-      } else {
-        expiresAt = new Date(now.getTime() + 10 * 60 * 1000);
-      }
+      // Session expires at the shop's daily closing time (see computeSessionExpiry).
+      const expiresAt = computeSessionExpiry(new Date());
       profile.expiresAt = expiresAt;
-      
+
       profile.updatedAt = new Date();
       console.log(`[ACCESS REQUEST APPROVED] Profile ${profile.name} (In-Memory) approved by Admin. Expires at ${expiresAt}`);
       res.json(profile);
@@ -868,15 +865,34 @@ export async function recalculateDailyBalances(fromDate?: Date): Promise<void> {
   }
 }
 
-// GET endpoint to retrieve daily closing balances
+// GET endpoint to retrieve daily closing balances.
+// Read-only: the collection is kept correct incrementally on every transaction
+// write (see recalculateDailyBalances(savedTx.date) in the transaction routes),
+// so there is no need to recompute the whole collection on every read.
 app.get('/api/daily-balances', async (req, res) => {
   try {
-    await recalculateDailyBalances();
     if (isMongoConnected) {
       const balances = await DailyClosingBalance.find().sort({ date: 1 });
       res.json(balances);
     } else {
       res.json(fallbackDailyClosingBalances);
+    }
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Returns just the newest closing-balance row (the current running totals for
+// cash / online / gold / diamond). The home summary cards poll this instead of
+// downloading the entire day-by-day balance history to read one row.
+app.get('/api/daily-balances/latest', async (req, res) => {
+  try {
+    if (isMongoConnected) {
+      const latest = await DailyClosingBalance.findOne().sort({ date: -1 }).lean();
+      res.json(latest || null);
+    } else {
+      const list = fallbackDailyClosingBalances;
+      res.json(list.length ? list[list.length - 1] : null);
     }
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -896,6 +912,7 @@ app.post('/api/parties', async (req, res) => {
   try {
     const newParty = new Party(req.body);
     const savedParty = await newParty.save();
+    broadcastEvent('parties_updated');
     res.status(201).json(savedParty);
   } catch (err: any) {
     res.status(400).json({ error: err.message });
@@ -904,6 +921,7 @@ app.post('/api/parties', async (req, res) => {
 app.put('/api/parties/:id', async (req, res) => {
   try {
     const updatedParty = await Party.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    broadcastEvent('parties_updated');
     res.json(updatedParty);
   } catch (err: any) {
     res.status(400).json({ error: err.message });
@@ -912,6 +930,7 @@ app.put('/api/parties/:id', async (req, res) => {
 app.delete('/api/parties/:id', async (req, res) => {
   try {
     await Party.findByIdAndDelete(req.params.id);
+    broadcastEvent('parties_updated');
     res.json({ message: 'Party deleted successfully' });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -929,8 +948,8 @@ async function authenticate(req: Request, res: Response, next: NextFunction) {
     if (androidId && brand) {
       if (isMongoConnected) {
         const admin = await Admin.findOne({
-          androidId: { $regex: new RegExp(`^${androidId}$`, 'i') },
-          brand: { $regex: new RegExp(`^${brand}$`, 'i') },
+          androidId: { $regex: new RegExp(`^${escapeRegex(androidId)}$`, 'i') },
+          brand: { $regex: new RegExp(`^${escapeRegex(brand)}$`, 'i') },
         });
         if (admin) {
           req.body.callerRole = 'admin';
@@ -989,10 +1008,92 @@ function requireAdmin(req: Request, res: Response, next: NextFunction) {
   return res.status(403).json({ error: 'Forbidden: Only Admins can modify or delete finalized transactions.' });
 }
 
+// ─── Party balance engine (single source of truth, server-side) ──────────
+// Computes the atomic $inc deltas a transaction applies to its party's stored
+// balances. This mirrors the ledger convention the app uses:
+//   debit  (payment / sale / metalOut)          increases the party's balance
+//   credit (receipt / purchase / metalIn / return_) decreases it
+// `direction` is +1 to apply a transaction, -1 to reverse it.
+function partyBalanceInc(tx: any, direction = 1): Record<string, number> {
+  const isDebit = tx.type === 'payment' || tx.type === 'sale' || tx.type === 'metalOut';
+  const isCredit = tx.type === 'receipt' || tx.type === 'purchase' || tx.type === 'metalIn' || tx.type === 'return_';
+  const sign = (isDebit ? 1 : isCredit ? -1 : 0) * direction;
+  if (sign === 0) return {};
+
+  if (!tx.metalType) {
+    const amt = Number(tx.cashAmount) || 0;
+    return amt ? { cashBalance: sign * amt } : {};
+  }
+  const wt = Number(tx.metalWeight) || 0;
+  if (tx.metalType === 'gold') return wt ? { goldBalanceGrams: sign * wt } : {};
+  if (tx.metalType === 'diamond') return wt ? { diamondBalanceCarats: sign * wt } : {};
+  return {}; // silver / unknown metal types do not affect stored balances
+}
+
+function mergeInc(...incs: Record<string, number>[]): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const inc of incs) {
+    for (const [k, v] of Object.entries(inc)) {
+      out[k] = (out[k] || 0) + v;
+    }
+  }
+  return out;
+}
+
+// Atomically apply an $inc to a party's balances. No-op when disconnected,
+// when partyId is missing, or when there is nothing to change.
+async function applyPartyBalanceInc(partyId: string, inc: Record<string, number>): Promise<void> {
+  if (!isMongoConnected || !partyId) return;
+  if (Object.keys(inc).length === 0) return;
+  await Party.updateOne({ _id: partyId }, { $inc: inc });
+}
+
 // CRUD Routes for Transactions
+//
+// Supports optional server-side filtering and pagination so clients no longer
+// have to download the entire collection on every poll:
+//   ?partyId=<id>          → only that party's transactions (uses partyId index)
+//   ?from=<iso>&to=<iso>   → only transactions in that date window (uses date index)
+//   ?limit=<n>&skip=<n>    → return one batch of <n>, skipping <n> (infinite scroll)
+// With no query params the behaviour is identical to before (full collection,
+// newest first) — so existing callers keep working unchanged.
 app.get('/api/transactions', authenticate, async (req, res) => {
   try {
-    const transactions = await Transaction.find().sort({ date: -1 });
+    const { partyId, from, to, limit, skip } = req.query as Record<string, string | undefined>;
+
+    const filter: Record<string, any> = {};
+    if (partyId) filter.partyId = partyId;
+
+    if (from || to) {
+      const dateFilter: Record<string, Date> = {};
+      const fromDate = from ? new Date(from) : undefined;
+      const toDate = to ? new Date(to) : undefined;
+      if (fromDate && !isNaN(fromDate.getTime())) dateFilter.$gte = fromDate;
+      if (toDate && !isNaN(toDate.getTime())) dateFilter.$lte = toDate;
+      if (Object.keys(dateFilter).length > 0) filter.date = dateFilter;
+    }
+
+    let query = Transaction.find(filter).sort({ date: -1 });
+
+    const parsedSkip = Math.max(0, parseInt(skip ?? '', 10) || 0);
+    const parsedLimit = parseInt(limit ?? '', 10);
+    const paginated = Number.isFinite(parsedLimit) && parsedLimit > 0;
+    if (paginated) {
+      // Cap the page size so a bad/oversized request can't drag the server down.
+      query = query.skip(parsedSkip).limit(Math.min(parsedLimit, 200));
+    }
+
+    // On the first page of a paginated request, report the total match count via
+    // a header so the client can know whether more pages exist without a second
+    // round-trip. Skipped on later pages to avoid a redundant count each scroll.
+    if (paginated && parsedSkip === 0) {
+      const total = await Transaction.countDocuments(filter);
+      res.setHeader('X-Total-Count', String(total));
+    }
+
+    // .lean() returns plain JS objects instead of hydrated Mongoose documents —
+    // noticeably less CPU/memory per request on these read-heavy list endpoints.
+    const transactions = await query.lean();
     res.json(transactions);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -1019,8 +1120,20 @@ app.post('/api/transactions', authenticate, async (req, res) => {
 
     const newTx = new Transaction(req.body);
     const savedTx = await newTx.save();
-    // Run balance recalculation in background (incremental from this transaction's date)
-    recalculateDailyBalances(savedTx.date).catch(err => console.error('[DAILY BALANCE RECALCULATION] Background error:', err));
+    // Atomically apply this transaction's impact to the party balance (server is
+    // the single authority — the client no longer read-modify-writes balances).
+    try {
+      await applyPartyBalanceInc(savedTx.partyId, partyBalanceInc(savedTx, 1));
+    } catch (balErr) {
+      console.error('[PARTY BALANCE] Failed to apply balance on create:', balErr);
+    }
+    // Push the new transaction to every connected client immediately (the tx and
+    // the party balance are already committed above), then push again once the
+    // background daily-balance recalculation finishes so the balance cards catch up.
+    broadcastEvent('transactions_updated');
+    recalculateDailyBalances(savedTx.date)
+      .then(() => broadcastEvent('transactions_updated'))
+      .catch(err => console.error('[DAILY BALANCE RECALCULATION] Background error:', err));
     res.status(201).json(savedTx);
   } catch (err: any) {
     res.status(400).json({ error: err.message });
@@ -1030,9 +1143,29 @@ app.put('/api/transactions/:id', authenticate, requireAdmin, async (req, res) =>
   try {
     const oldTx = await Transaction.findById(req.params.id);
     const updatedTx = await Transaction.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    // Atomically adjust the party balance: reverse the old impact, apply the new.
+    try {
+      if (oldTx && updatedTx) {
+        if (String(oldTx.partyId) === String(updatedTx.partyId)) {
+          await applyPartyBalanceInc(
+            updatedTx.partyId,
+            mergeInc(partyBalanceInc(oldTx, -1), partyBalanceInc(updatedTx, 1)),
+          );
+        } else {
+          // Party changed on edit: reverse on the old party, apply on the new one.
+          await applyPartyBalanceInc(oldTx.partyId, partyBalanceInc(oldTx, -1));
+          await applyPartyBalanceInc(updatedTx.partyId, partyBalanceInc(updatedTx, 1));
+        }
+      }
+    } catch (balErr) {
+      console.error('[PARTY BALANCE] Failed to apply balance on update:', balErr);
+    }
     // Run incremental recalculation from the earlier of old/new date
     const recalcFrom = oldTx && updatedTx ? (oldTx.date < updatedTx.date ? oldTx.date : updatedTx.date) : undefined;
-    recalculateDailyBalances(recalcFrom).catch(err => console.error('[DAILY BALANCE RECALCULATION] Background error:', err));
+    broadcastEvent('transactions_updated');
+    recalculateDailyBalances(recalcFrom)
+      .then(() => broadcastEvent('transactions_updated'))
+      .catch(err => console.error('[DAILY BALANCE RECALCULATION] Background error:', err));
     res.json(updatedTx);
   } catch (err: any) {
     res.status(400).json({ error: err.message });
@@ -1043,8 +1176,19 @@ app.delete('/api/transactions/:id', authenticate, requireAdmin, async (req, res)
     const txToDelete = await Transaction.findById(req.params.id);
     const deleteDate = txToDelete?.date;
     await Transaction.findByIdAndDelete(req.params.id);
+    // Atomically reverse the deleted transaction's impact on the party balance.
+    if (txToDelete) {
+      try {
+        await applyPartyBalanceInc(txToDelete.partyId, partyBalanceInc(txToDelete, -1));
+      } catch (balErr) {
+        console.error('[PARTY BALANCE] Failed to reverse balance on delete:', balErr);
+      }
+    }
     // Run incremental recalculation from the deleted transaction's date
-    recalculateDailyBalances(deleteDate).catch(err => console.error('[DAILY BALANCE RECALCULATION] Background error:', err));
+    broadcastEvent('transactions_updated');
+    recalculateDailyBalances(deleteDate)
+      .then(() => broadcastEvent('transactions_updated'))
+      .catch(err => console.error('[DAILY BALANCE RECALCULATION] Background error:', err));
     res.json({ message: 'Transaction deleted successfully' });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -1052,9 +1196,14 @@ app.delete('/api/transactions/:id', authenticate, requireAdmin, async (req, res)
 });
 
 // CRUD Routes for Reminders
+// Optional ?partyId=<id> filters server-side so party views don't download the
+// whole reminders collection just to keep the rows for one party.
 app.get('/api/reminders', async (req, res) => {
   try {
-    const reminders = await Reminder.find().sort({ date: 1 });
+    const { partyId } = req.query as Record<string, string | undefined>;
+    const filter: Record<string, any> = {};
+    if (partyId) filter.partyId = partyId;
+    const reminders = await Reminder.find(filter).sort({ date: 1 }).lean();
     res.json(reminders);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -1142,13 +1291,22 @@ app.get('/api/events', (req: Request, res: Response) => {
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders();
 
   // Initial connection event
   res.write('data: connected\n\n');
 
   sseClients.push(res);
 
+  // Heartbeat: send a comment ping periodically so proxies (Hostinger / mobile
+  // carriers) don't silently drop the idle stream, and so the client can detect
+  // a dead connection quickly and reconnect.
+  const heartbeat = setInterval(() => {
+    res.write(': keep-alive\n\n');
+  }, 20000);
+
   req.on('close', () => {
+    clearInterval(heartbeat);
     sseClients = sseClients.filter(client => client !== res);
   });
 });

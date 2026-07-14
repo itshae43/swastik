@@ -7,8 +7,13 @@ import 'package:swastik_mobile_app/core/utils/constants.dart';
 class ReminderService {
   final String baseUrl = AppConstants.baseUrl;
 
-  Future<List<ReminderModel>> fetchReminders() async {
-    final res = await http.get(Uri.parse('$baseUrl/reminders'));
+  Future<List<ReminderModel>> fetchReminders({String? partyId}) async {
+    final uri = Uri.parse('$baseUrl/reminders').replace(
+      queryParameters: (partyId != null && partyId.isNotEmpty)
+          ? {'partyId': partyId}
+          : null,
+    );
+    final res = await http.get(uri);
     if (res.statusCode == 200) {
       final List data = jsonDecode(res.body);
       return data
@@ -27,19 +32,19 @@ class ReminderService {
       } catch (_) {
         // Keep the polling stream alive; the next cycle will retry.
       }
-      await Future.delayed(const Duration(seconds: 3));
+      await Future.delayed(const Duration(seconds: 12));
     }
   }
 
   Stream<List<ReminderModel>> getPartyReminders(String partyId) async* {
     while (true) {
       try {
-        final all = await fetchReminders();
-        yield all.where((r) => r.partyId == partyId).toList();
+        // Filter by partyId on the server instead of fetching all reminders.
+        yield await fetchReminders(partyId: partyId);
       } catch (_) {
         // Keep the polling stream alive; the next cycle will retry.
       }
-      await Future.delayed(const Duration(seconds: 3));
+      await Future.delayed(const Duration(seconds: 12));
     }
   }
 

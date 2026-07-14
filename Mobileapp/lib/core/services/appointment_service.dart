@@ -27,7 +27,7 @@ class AppointmentService {
       } catch (_) {
         // Keep the polling stream alive; the next cycle will retry.
       }
-      await Future.delayed(const Duration(seconds: 3));
+      await Future.delayed(const Duration(seconds: 12));
     }
   }
 

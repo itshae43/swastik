@@ -34,6 +34,16 @@ class AuthNotifier extends Notifier<AuthStatus> {
   DateTime? _localLastApprovalTime;
   http.Client? _sseClient;
 
+  // Watchdog tolerance: require consecutive authoritative "inactive" reads
+  // before logging out, so a single blip doesn't kick an active staff session.
+  int _invalidReads = 0;
+
+  // Admin realtime (SSE) reconnection state.
+  Timer? _sseReconnectTimer;
+  Timer? _adminPollTimer;
+  bool _adminListenersActive = false;
+  int _sseRetryDelayMs = 1000;
+
   @override
   AuthStatus build() {
     // Start verification immediately
@@ -66,21 +76,39 @@ class AuthNotifier extends Notifier<AuthStatus> {
       
       if (savedProfileId != null && savedAndroidId != null && savedAndroidId == DeviceIdentity.androidId) {
         debugPrint('[AuthNotifier] Found saved staff session for profile $savedProfileId. Verifying...');
-        try {
-          final sessionData = await authService.verifyStaffSession(DeviceIdentity.androidId);
-          if (sessionData != null && sessionData['profile'] != null) {
-            final profile = UserProfileModel.fromJson(
-              Map<String, dynamic>.from(sessionData['profile']),
-            );
-            debugPrint('[AuthNotifier] Staff session restored for ${profile.name}');
-            loginAsStaff(profile);
-            return;
-          } else {
-            debugPrint('[AuthNotifier] Saved staff session is no longer valid. Clearing...');
-            await _clearSavedSession();
+        Map<String, dynamic>? sessionData;
+        bool inconclusive = false;
+        // Retry a couple of times so a slow/poor connection on launch doesn't
+        // look like "session invalid".
+        for (int attempt = 0; attempt < 2; attempt++) {
+          try {
+            sessionData = await authService.verifyStaffSession(DeviceIdentity.androidId);
+            inconclusive = false;
+            break;
+          } catch (e) {
+            inconclusive = true;
+            debugPrint('[AuthNotifier] verify-session inconclusive (attempt ${attempt + 1}): $e');
+            await Future.delayed(Duration(milliseconds: 800 * (attempt + 1)));
           }
-        } catch (e) {
-          debugPrint('[AuthNotifier] Error verifying saved session: $e');
+        }
+
+        if (sessionData != null && sessionData['profile'] != null) {
+          final profile = UserProfileModel.fromJson(
+            Map<String, dynamic>.from(sessionData['profile']),
+          );
+          debugPrint('[AuthNotifier] Staff session restored for ${profile.name}');
+          loginAsStaff(profile);
+          return;
+        }
+
+        if (inconclusive) {
+          // Could not reach the server. Do NOT discard the session — keep it so
+          // the next launch (or the Resume button once the profile list loads)
+          // can restore it without a new admin approval.
+          debugPrint('[AuthNotifier] Server unreachable; keeping saved staff session for later.');
+        } else {
+          // Server explicitly said the session is no longer valid → safe to clear.
+          debugPrint('[AuthNotifier] Saved staff session is no longer valid. Clearing...');
           await _clearSavedSession();
         }
       }
@@ -100,12 +128,27 @@ class AuthNotifier extends Notifier<AuthStatus> {
   }
 
   void _startAdminSseListener() {
+    _adminListenersActive = true;
+    _sseReconnectTimer?.cancel();
+    _sseRetryDelayMs = 1000;
+    _connectSse();
+    _startAdminPollFallback();
+  }
+
+  void _connectSse() {
+    if (!_adminListenersActive) return;
     _sseClient?.close();
     _sseClient = http.Client();
-    
+
     final request = http.Request('GET', Uri.parse('${ApiConfig.baseUrl}/api/events'));
-    
+
     _sseClient!.send(request).then((response) {
+      // Connected: reset backoff and immediately refetch to catch anything that
+      // changed while we were disconnected.
+      _sseRetryDelayMs = 1000;
+      debugPrint('[AuthNotifier] SSE connected.');
+      ref.read(userProfilesNotifierProvider.notifier).fetchProfiles();
+
       response.stream.transform(utf8.decoder).listen((data) {
         if (data.contains('profiles_updated')) {
           debugPrint('[AuthNotifier] SSE received profiles_updated. Fetching profiles...');
@@ -113,13 +156,44 @@ class AuthNotifier extends Notifier<AuthStatus> {
         }
       }, onError: (err) {
         debugPrint('[AuthNotifier] SSE Error: $err');
-        _sseClient?.close();
+        _scheduleSseReconnect();
       }, onDone: () {
         debugPrint('[AuthNotifier] SSE connection closed.');
-      });
+        _scheduleSseReconnect();
+      }, cancelOnError: true);
     }).catchError((err) {
       debugPrint('[AuthNotifier] SSE connection failed: $err');
+      _scheduleSseReconnect();
     });
+  }
+
+  void _scheduleSseReconnect() {
+    if (!_adminListenersActive) return;
+    _sseClient?.close();
+    _sseReconnectTimer?.cancel();
+    final delay = Duration(milliseconds: _sseRetryDelayMs);
+    debugPrint('[AuthNotifier] Reconnecting SSE in ${delay.inMilliseconds}ms');
+    _sseReconnectTimer = Timer(delay, _connectSse);
+    // Exponential backoff, capped at 30s.
+    _sseRetryDelayMs = (_sseRetryDelayMs * 2).clamp(1000, 30000).toInt();
+  }
+
+  // Safety net: even if SSE is dead on a poor connection, refresh the admin's
+  // profile/request list on a slow timer so it never goes permanently stale.
+  void _startAdminPollFallback() {
+    _adminPollTimer?.cancel();
+    _adminPollTimer = Timer.periodic(const Duration(seconds: 45), (_) {
+      ref.read(userProfilesNotifierProvider.notifier).fetchProfiles();
+    });
+  }
+
+  void _stopAdminListeners() {
+    _adminListenersActive = false;
+    _sseReconnectTimer?.cancel();
+    _sseReconnectTimer = null;
+    _adminPollTimer?.cancel();
+    _adminPollTimer = null;
+    _sseClient?.close();
   }
 
   void loginAsStaff(UserProfileModel profile) {
@@ -132,10 +206,12 @@ class AuthNotifier extends Notifier<AuthStatus> {
 
     _logoutTimer?.cancel();
     _pollingTimer?.cancel();
-    _sseClient?.close();
-    
+    _stopAdminListeners();
+    _invalidReads = 0;
+
     if (profile.expiresAt != null) {
-      final diff = profile.expiresAt!.difference(DateTime.now());
+      // Use server-synced time so a skewed device clock can't expire early/late.
+      final diff = profile.expiresAt!.difference(TimeUtils.now);
       if (diff.isNegative) {
         logoutLocal();
         return;
@@ -151,20 +227,29 @@ class AuthNotifier extends Notifier<AuthStatus> {
       try {
         await ref.read(userProfilesNotifierProvider.notifier).fetchProfiles();
         final profilesState = ref.read(userProfilesNotifierProvider);
-        
+
         final updatedProfile = profilesState.profiles.firstWhere(
           (p) => p.id == profile.id,
           orElse: () => profile,
         );
-        
+
         if (!updatedProfile.sessionActive || updatedProfile.status == 'inactive') {
-          debugPrint('[AuthNotifier] Session invalidated remotely. Logging out.');
-          logoutLocal();
-        } else if (_localLastApprovalTime != null && 
-                   updatedProfile.lastApprovalTime != null && 
-                   updatedProfile.lastApprovalTime!.isAfter(_localLastApprovalTime!)) {
-          debugPrint('[AuthNotifier] New device approved. Logging out old device.');
-          logoutLocal();
+          // Only log out after two consecutive authoritative "inactive" reads,
+          // so a single stale/blip response can't kick an active session. (A
+          // failed fetch keeps the old active profile, so it won't count here.)
+          _invalidReads++;
+          if (_invalidReads >= 2) {
+            debugPrint('[AuthNotifier] Session invalidated remotely (confirmed). Logging out.');
+            logoutLocal();
+          }
+        } else {
+          _invalidReads = 0;
+          if (_localLastApprovalTime != null &&
+              updatedProfile.lastApprovalTime != null &&
+              updatedProfile.lastApprovalTime!.isAfter(_localLastApprovalTime!)) {
+            debugPrint('[AuthNotifier] New device approved. Logging out old device.');
+            logoutLocal();
+          }
         }
       } catch (e) {
         debugPrint('[AuthNotifier] Polling error: $e');
@@ -206,7 +291,8 @@ class AuthNotifier extends Notifier<AuthStatus> {
   void logoutLocal() {
     _logoutTimer?.cancel();
     _pollingTimer?.cancel();
-    _sseClient?.close();
+    _stopAdminListeners();
+    _invalidReads = 0;
     ref.read(currentUserProfileProvider.notifier).setProfile(null);
     _clearSavedSession();
     state = AuthStatus.unverified;

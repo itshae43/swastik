@@ -410,86 +410,96 @@ class _CustomFilterSheetState extends State<CustomFilterSheet>
               ),
             )
           else
-            Row(
-              children: [
-                Expanded(
-                  child: GestureDetector(
-                    onTap: () => setState(() => _selectingStartDate = true),
-                    child: Container(
-                      margin: const EdgeInsets.only(bottom: 8),
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-                      decoration: BoxDecoration(
-                        color: _selectingStartDate ? _teal.withOpacity(0.08) : Colors.transparent,
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(
-                          color: _selectingStartDate ? _teal.withOpacity(0.3) : _cardBorder,
+            Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              decoration: BoxDecoration(
+                color: _beige,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: _cardBorder),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () {
+                        setState(() => _selectingStartDate = true);
+                      },
+                      behavior: HitTestBehavior.opaque,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        decoration: BoxDecoration(
+                          color: _selectingStartDate ? _teal.withOpacity(0.1) : Colors.transparent,
+                          borderRadius: const BorderRadius.horizontal(left: Radius.circular(12)),
                         ),
-                      ),
-                      child: Column(
-                        children: [
-                          Text(
-                            'Start Date',
-                            style: GoogleFonts.montserrat(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w600,
-                              color: _selectingStartDate ? _teal : Colors.grey[600],
+                        child: Column(
+                          children: [
+                            Text(
+                              'Start Date',
+                              style: GoogleFonts.montserrat(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w600,
+                                color: _selectingStartDate ? _teal : Colors.grey[600],
+                              ),
                             ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            DateFormat('dd MMM yyyy').format(_selectedDate),
-                            style: GoogleFonts.montserrat(
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                              color: _selectingStartDate ? _teal : _textDark,
+                            const SizedBox(height: 4),
+                            Text(
+                              DateFormat('dd MMM yyyy').format(_selectedDate),
+                              style: GoogleFonts.montserrat(
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                                color: _selectingStartDate ? _teal : _textDark,
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
                   ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: GestureDetector(
-                    onTap: () => setState(() => _selectingStartDate = false),
-                    child: Container(
-                      margin: const EdgeInsets.only(bottom: 8),
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-                      decoration: BoxDecoration(
-                        color: !_selectingStartDate ? _teal.withOpacity(0.08) : Colors.transparent,
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(
-                          color: !_selectingStartDate ? _teal.withOpacity(0.3) : _cardBorder,
+                  Container(
+                    width: 1,
+                    height: 40,
+                    color: _cardBorder,
+                  ),
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () {
+                        setState(() => _selectingStartDate = false);
+                      },
+                      behavior: HitTestBehavior.opaque,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        decoration: BoxDecoration(
+                          color: !_selectingStartDate ? _teal.withOpacity(0.1) : Colors.transparent,
+                          borderRadius: const BorderRadius.horizontal(right: Radius.circular(12)),
                         ),
-                      ),
-                      child: Column(
-                        children: [
-                          Text(
-                            'End Date',
-                            style: GoogleFonts.montserrat(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w600,
-                              color: !_selectingStartDate ? _teal : Colors.grey[600],
+                        child: Column(
+                          children: [
+                            Text(
+                              'End Date',
+                              style: GoogleFonts.montserrat(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w600,
+                                color: !_selectingStartDate ? _teal : Colors.grey[600],
+                              ),
                             ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            _selectedEndDate != null
-                                ? DateFormat('dd MMM yyyy').format(_selectedEndDate!)
-                                : 'Select',
-                            style: GoogleFonts.montserrat(
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                              color: !_selectingStartDate ? _teal : _textDark,
+                            const SizedBox(height: 4),
+                            Text(
+                              _selectedEndDate != null
+                                  ? DateFormat('dd MMM yyyy').format(_selectedEndDate!)
+                                  : 'Select',
+                              style: GoogleFonts.montserrat(
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                                color: !_selectingStartDate ? _teal : _textDark,
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
 
           Expanded(
@@ -612,18 +622,26 @@ class _CustomFilterSheetState extends State<CustomFilterSheet>
         ? DateTime(_selectedEndDate!.year, _selectedEndDate!.month, _selectedEndDate!.day)
         : null;
 
-    bool isStart = normalizedDate.isAtSameMomentAs(normalizedStart);
-    bool isEnd = _isDateRange && normalizedEnd != null && normalizedDate.isAtSameMomentAs(normalizedEnd);
-    bool isSingle = !_isDateRange || (isStart && normalizedEnd == null) || (isStart && isEnd);
+    bool isSelected = false;
+    bool isDisabled = false;
 
-    bool inRange = false;
-    if (_isDateRange && normalizedEnd != null) {
-      if (normalizedDate.isAfter(normalizedStart) && normalizedDate.isBefore(normalizedEnd)) {
-        inRange = true;
+    if (!_isDateRange) {
+      isSelected = normalizedDate.isAtSameMomentAs(normalizedStart);
+    } else {
+      bool isStart = normalizedDate.isAtSameMomentAs(normalizedStart);
+      bool isEnd = normalizedEnd != null && normalizedDate.isAtSameMomentAs(normalizedEnd);
+      isSelected = isStart || isEnd;
+
+      if (_selectingStartDate) {
+        if (normalizedEnd != null && normalizedDate.isAfter(normalizedEnd)) {
+          isDisabled = true;
+        }
+      } else {
+        if (normalizedDate.isBefore(normalizedStart)) {
+          isDisabled = true;
+        }
       }
     }
-
-    bool isSelected = isStart || isEnd;
 
     Widget cellContent = Center(
       child: Text(
@@ -631,63 +649,32 @@ class _CustomFilterSheetState extends State<CustomFilterSheet>
         style: GoogleFonts.montserrat(
           fontSize: 13,
           fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-          color: isSelected ? Colors.white : (inRange ? _teal : _textDark),
+          color: isDisabled
+              ? Colors.grey[400]
+              : (isSelected ? Colors.white : _textDark),
         ),
       ),
     );
 
-    if (isSingle && isSelected) {
-      return GestureDetector(
-        onTap: () => _onDateSelected(date),
-        child: Container(
-          margin: const EdgeInsets.all(6),
-          decoration: const BoxDecoration(
-            color: _teal,
-            shape: BoxShape.circle,
-          ),
-          child: cellContent,
-        ),
+    if (isDisabled) {
+      return Container(
+        margin: const EdgeInsets.all(6),
+        child: cellContent,
       );
     }
 
     return GestureDetector(
       onTap: () => _onDateSelected(date),
-      child: Stack(
-        children: [
-          if (inRange || (isSelected && !isSingle))
-            Positioned.fill(
-              top: 6,
-              bottom: 6,
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Container(
-                      color: (isEnd || inRange) ? _teal.withOpacity(0.15) : Colors.transparent,
-                    ),
-                  ),
-                  Expanded(
-                    child: Container(
-                      color: (isStart || inRange) ? _teal.withOpacity(0.15) : Colors.transparent,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          if (isSelected)
-            Container(
-              margin: const EdgeInsets.all(6),
-              decoration: const BoxDecoration(
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        margin: const EdgeInsets.all(6),
+        decoration: isSelected
+            ? const BoxDecoration(
                 color: _teal,
                 shape: BoxShape.circle,
-              ),
-              child: cellContent,
-            )
-          else
-            Container(
-              margin: const EdgeInsets.all(6),
-              child: cellContent,
-            ),
-        ],
+              )
+            : null,
+        child: cellContent,
       ),
     );
   }
@@ -699,14 +686,8 @@ class _CustomFilterSheetState extends State<CustomFilterSheet>
       } else {
         if (_selectingStartDate) {
           _selectedDate = date;
-          if (_selectedEndDate != null && _selectedDate.isAfter(_selectedEndDate!)) {
-            _selectedEndDate = _selectedDate.add(const Duration(days: 1));
-          }
         } else {
           _selectedEndDate = date;
-          if (_selectedDate.isAfter(_selectedEndDate!)) {
-            _selectedDate = _selectedEndDate!.subtract(const Duration(days: 1));
-          }
         }
       }
     });
