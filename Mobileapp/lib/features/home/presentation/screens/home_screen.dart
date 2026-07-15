@@ -168,7 +168,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   Future<void> _handleRefresh() async {
     ref.invalidate(partiesStreamProvider);
-    ref.invalidate(latestDailyBalanceProvider);
+    // Summary cards are derived from the full transaction list, so refresh that
+    // too (not just the paginated table window) to pull the latest totals.
+    ref.invalidate(transactionsStreamProvider);
     try {
       await Future.wait([
         ref.read(homeTransactionsProvider.notifier).refresh(),
@@ -325,6 +327,45 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     }).toList();
   }
 
+  /// Running balance for a summary card, computed from the full transaction
+  /// list. Kept byte-for-byte in step with the per-card statement screen
+  /// (statement_screen.dart) so the dashboard cards and the detail view can
+  /// never disagree:
+  ///   • cash    → non-metal transactions paid in cash
+  ///   • online  → non-metal transactions paid online / upi / rtgs
+  ///   • gold    → transactions with metalType == 'gold'
+  ///   • diamond → transactions with metalType == 'diamond'
+  /// Credits (receipt / metalIn) add, debits (payment / metalOut) subtract.
+  double _computeCategoryTotal(List<TransactionModel> txns, String category) {
+    double total = 0.0;
+    for (final t in txns) {
+      final bool matches;
+      if (category == 'cash') {
+        matches = t.metalType.isEmpty && t.paymentMode == PaymentMode.cash;
+      } else if (category == 'online') {
+        matches = t.metalType.isEmpty &&
+            (t.paymentMode == PaymentMode.online ||
+                t.paymentMode == PaymentMode.upi ||
+                t.paymentMode == PaymentMode.rtgs);
+      } else {
+        matches = t.metalType == category;
+      }
+      if (!matches) continue;
+
+      final isCredit =
+          t.type == TransactionType.receipt || t.type == TransactionType.metalIn;
+      final isDebit =
+          t.type == TransactionType.payment || t.type == TransactionType.metalOut;
+      final val = t.metalType.isEmpty ? t.cashAmount : t.metalWeight;
+      if (isCredit) {
+        total += val;
+      } else if (isDebit) {
+        total -= val;
+      }
+    }
+    return total;
+  }
+
   @override
   Widget build(BuildContext context) {
     final isTablet = AppResponsive.isTablet(context);
@@ -335,15 +376,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final txState = ref.watch(homeTransactionsProvider);
     final transactionsAsync = _asAsync(txState);
 
-    // Summary cards show the all-time running totals. These are read from the
-    // latest server-computed daily-closing-balance row (a single lightweight
-    // document) instead of re-summing every transaction on the device — so the
-    // cards no longer need the full transaction history downloaded to the phone.
-    final latestBalance = ref.watch(latestDailyBalanceProvider).value;
-    final double cashVal = latestBalance?.closingCash ?? 0.0;
-    final double onlineVal = latestBalance?.closingOnline ?? 0.0;
-    final double goldVal = latestBalance?.closingGold ?? 0.0;
-    final double diamondVal = latestBalance?.closingDiamond ?? 0.0;
+    // Summary cards are computed live from the full transaction list — the same
+    // source and formula the per-card statement screen uses (see
+    // _computeCategoryTotal). This guarantees the cards always match the detail
+    // view and refresh immediately whenever an entry is added / edited / deleted,
+    // instead of trusting the server's precomputed daily-closing-balance row,
+    // which could lag behind or diverge from the live transactions.
+    final List<TransactionModel> allTxns =
+        ref.watch(transactionsStreamProvider).value ?? const <TransactionModel>[];
+    final double cashVal = _computeCategoryTotal(allTxns, 'cash');
+    final double onlineVal = _computeCategoryTotal(allTxns, 'online');
+    final double goldVal = _computeCategoryTotal(allTxns, 'gold');
+    final double diamondVal = _computeCategoryTotal(allTxns, 'diamond');
 
     final String displayCash =
         '₹ ${NumberFormat.decimalPattern('en_IN').format(cashVal)}';
