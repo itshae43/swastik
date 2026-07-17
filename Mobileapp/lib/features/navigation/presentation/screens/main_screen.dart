@@ -91,6 +91,10 @@ class _MainScreenState extends ConsumerState<MainScreen>
       ref.invalidate(transactionsStreamProvider);
       ref.invalidate(dailyBalancesStreamProvider);
       ref.invalidate(partiesStreamProvider);
+      // Home table + summary totals are in-place providers — refresh them so the
+      // dashboard shows the latest window and totals on resume.
+      ref.read(homeTransactionsProvider.notifier).refresh();
+      ref.read(transactionSummaryProvider.notifier).refresh();
       // The SSE socket is often silently killed while backgrounded — re-establish
       // it so live updates resume immediately.
       ref.read(realtimeSyncProvider.notifier).reconnect();

@@ -7,6 +7,7 @@ import 'package:swastik_mobile_app/core/utils/constants.dart';
 import 'package:swastik_mobile_app/core/utils/time_utils.dart';
 
 import 'package:swastik_mobile_app/core/models/daily_closing_balance_model.dart';
+import 'package:swastik_mobile_app/core/models/txn_summary_model.dart';
 import 'package:swastik_mobile_app/features/auth/providers/auth_providers.dart';
 import 'package:swastik_mobile_app/features/parties/providers/party_providers.dart';
 
@@ -29,6 +30,56 @@ final dailyBalancesStreamProvider = StreamProvider<List<DailyClosingBalanceModel
 final latestDailyBalanceProvider = StreamProvider<DailyClosingBalanceModel?>((ref) {
   return ref.watch(transactionServiceProvider).latestDailyBalanceStream();
 });
+
+// ─────────────────────────────────────────────────────────────────────────
+// Home summary totals — server-side aggregated + optimistic.
+//
+// The home cards (Total Cash / Online / Gold / Diamond) used to be summed on
+// the device from the ENTIRE transactions collection, re-downloaded every 12s.
+// This notifier instead polls the tiny `/transactions/summary` endpoint (four
+// numbers) and lets a mutation push an instant [applyDelta] so the cards update
+// the moment an entry is saved — the next poll/refresh reconciles authoritatively.
+// ─────────────────────────────────────────────────────────────────────────
+class TxnSummaryNotifier extends Notifier<AsyncValue<TxnSummary>> {
+  Timer? _timer;
+
+  @override
+  AsyncValue<TxnSummary> build() {
+    ref.onDispose(() => _timer?.cancel());
+    _timer?.cancel();
+    _timer = Timer.periodic(const Duration(seconds: 12), (_) => _poll());
+    _poll(); // fetch immediately on first build
+    return const AsyncValue.loading();
+  }
+
+  TransactionService get _svc => ref.read(transactionServiceProvider);
+
+  Future<void> _poll() async {
+    try {
+      state = AsyncData(await _svc.fetchSummary());
+    } catch (e, st) {
+      // Keep showing the last good totals; only surface an error before we've
+      // ever had a value. The next tick retries.
+      if (state is! AsyncData) state = AsyncError(e, st);
+    }
+  }
+
+  /// Pull-to-refresh and post-mutation authoritative refetch.
+  Future<void> refresh() => _poll();
+
+  /// Instant optimistic adjustment applied the moment an entry is created /
+  /// edited / deleted, before the server round-trip returns. Reconciled by the
+  /// next [_poll] / [refresh], which overwrites (not adds to) the totals.
+  void applyDelta(TxnSummary delta) {
+    final current = state.value ?? TxnSummary.zero;
+    state = AsyncData(current + delta);
+  }
+}
+
+final transactionSummaryProvider =
+    NotifierProvider<TxnSummaryNotifier, AsyncValue<TxnSummary>>(
+  TxnSummaryNotifier.new,
+);
 
 // ─────────────────────────────────────────────────────────────────────────
 // Home transactions table — server-side filtered + batched loading.
@@ -176,6 +227,46 @@ class HomeTransactionsNotifier extends Notifier<HomeTxnState> {
   /// Pull-to-refresh: reload the current window from scratch.
   Future<void> refresh() => _reload();
 
+  bool _inWindow(TransactionModel tx) {
+    final q = _query;
+    if (q == null) return false;
+    if (q.all) return true;
+    if (q.from != null && tx.date.isBefore(q.from!)) return false;
+    if (q.to != null && tx.date.isAfter(q.to!)) return false;
+    return true;
+  }
+
+  /// Instantly show a freshly created entry at the top of the visible window
+  /// (if it falls inside the current filter) without waiting for the poll/refresh.
+  void addOptimistic(TransactionModel tx) {
+    if (!_inWindow(tx)) return;
+    if (state.items.any((t) => t.id == tx.id && tx.id.isNotEmpty)) return;
+    final items = [tx, ...state.items]..sort((a, b) => b.date.compareTo(a.date));
+    state = state.copyWith(items: items);
+  }
+
+  /// Instantly reflect an edited entry in the visible window.
+  void replaceOptimistic(TransactionModel tx) {
+    if (!state.items.any((t) => t.id == tx.id)) {
+      addOptimistic(tx);
+      return;
+    }
+    final items = state.items
+        .map((t) => t.id == tx.id ? tx : t)
+        .where(_inWindow)
+        .toList()
+      ..sort((a, b) => b.date.compareTo(a.date));
+    state = state.copyWith(items: items);
+  }
+
+  /// Instantly drop a deleted entry from the visible window.
+  void removeOptimistic(String id) {
+    if (id.isEmpty) return;
+    state = state.copyWith(
+      items: state.items.where((t) => t.id != id).toList(),
+    );
+  }
+
   /// Silent poll refresh — re-fetch the currently visible window (including all
   /// already-loaded "All" batches) without disturbing scroll or paging.
   Future<void> _refreshInPlace() async {
@@ -243,9 +334,11 @@ class TransactionNotifier extends Notifier<TransactionState> {
     ref.invalidate(dailyBalancesStreamProvider);
     ref.invalidate(latestDailyBalanceProvider);
     ref.invalidate(partiesStreamProvider);
-    // Home's table uses the server-side paginated provider — refresh its current
-    // window in place (invalidating would drop the active filter/paging state).
+    // Home's table + summary cards use in-place providers — refresh them without
+    // invalidating (which would drop the active filter/paging state, or the
+    // optimistic totals we just applied). Each refetch reconciles authoritatively.
     ref.read(homeTransactionsProvider.notifier).refresh();
+    ref.read(transactionSummaryProvider.notifier).refresh();
   }
 
   Future<bool> createTransaction({
@@ -283,7 +376,13 @@ class TransactionNotifier extends Notifier<TransactionState> {
         createdBy: ref.read(currentUserProfileProvider)?.name ?? 'Admin',
       );
 
-      await _transactionService.createTransaction(transaction);
+      final saved = await _transactionService.createTransaction(transaction);
+      // Optimistic: show the new row + updated totals instantly, before the
+      // authoritative refresh below lands.
+      ref.read(homeTransactionsProvider.notifier).addOptimistic(saved);
+      ref
+          .read(transactionSummaryProvider.notifier)
+          .applyDelta(TxnSummary.deltaOf(saved));
       _refreshDashboardStreams();
       state = state.copyWith(isLoading: false, isSuccess: true);
       return true;
@@ -320,6 +419,11 @@ class TransactionNotifier extends Notifier<TransactionState> {
       );
 
       await _transactionService.updateTransaction(oldTx, finalTx);
+      // Optimistic: swap old→new impact on the totals and the visible row instantly.
+      ref.read(homeTransactionsProvider.notifier).replaceOptimistic(finalTx);
+      ref
+          .read(transactionSummaryProvider.notifier)
+          .applyDelta(TxnSummary.deltaOf(finalTx) - TxnSummary.deltaOf(oldTx));
       _refreshDashboardStreams();
       state = state.copyWith(isLoading: false, isSuccess: true);
       return true;
@@ -333,6 +437,11 @@ class TransactionNotifier extends Notifier<TransactionState> {
     state = state.copyWith(isLoading: true, clearError: true);
     try {
       await _transactionService.deleteTransaction(transaction);
+      // Optimistic: remove the row + back out its impact on the totals instantly.
+      ref.read(homeTransactionsProvider.notifier).removeOptimistic(transaction.id);
+      ref
+          .read(transactionSummaryProvider.notifier)
+          .applyDelta(TxnSummary.zero - TxnSummary.deltaOf(transaction));
       _refreshDashboardStreams();
       state = state.copyWith(isLoading: false, isSuccess: true);
       return true;

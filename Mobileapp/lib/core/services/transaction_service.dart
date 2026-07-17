@@ -3,6 +3,7 @@ import 'package:http/http.dart' as http;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/transaction_model.dart';
 import '../models/daily_closing_balance_model.dart';
+import '../models/txn_summary_model.dart';
 import 'package:swastik_mobile_app/core/utils/device_identity.dart';
 import 'package:swastik_mobile_app/features/auth/providers/auth_providers.dart';
 import 'package:swastik_mobile_app/core/utils/constants.dart';
@@ -29,7 +30,10 @@ class TransactionService {
     return headers;
   }
 
-  Future<void> createTransaction(TransactionModel transaction) async {
+  /// Creates the transaction and returns the persisted model (with its
+  /// server-assigned `_id`) so callers can optimistically drop the row into the
+  /// visible list without waiting for the next poll.
+  Future<TransactionModel> createTransaction(TransactionModel transaction) async {
     // The server applies the party-balance impact atomically ($inc) when the
     // transaction is created, so the client only needs to POST the transaction.
     final response = await http.post(
@@ -41,6 +45,29 @@ class TransactionService {
     if (response.statusCode != 200 && response.statusCode != 201) {
       throw Exception('Failed to create transaction');
     }
+    final map = jsonDecode(response.body) as Map<String, dynamic>;
+    return TransactionModel.fromMap(map['_id']?.toString() ?? '', map);
+  }
+
+  /// Fetches just the four running totals for the home summary cards — a tiny
+  /// aggregation on the server instead of downloading the whole collection to
+  /// sum them on the device. Optional [from]/[to] scopes the totals to a window.
+  Future<TxnSummary> fetchSummary({DateTime? from, DateTime? to}) async {
+    final params = <String, String>{};
+    if (from != null) params['from'] = from.toUtc().toIso8601String();
+    if (to != null) params['to'] = to.toUtc().toIso8601String();
+
+    final uri = Uri.parse('$baseUrl/transactions/summary')
+        .replace(queryParameters: params.isEmpty ? null : params);
+
+    final res = await http
+        .get(uri, headers: _getHeaders())
+        .timeout(const Duration(seconds: 10));
+
+    if (res.statusCode != 200) {
+      throw Exception('Failed to load summary (${res.statusCode})');
+    }
+    return TxnSummary.fromMap(jsonDecode(res.body) as Map<String, dynamic>);
   }
 
   Future<void> deleteTransaction(TransactionModel transaction) async {

@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:swastik_mobile_app/core/models/party_model.dart';
 import 'package:swastik_mobile_app/core/models/transaction_model.dart';
+import 'package:swastik_mobile_app/core/models/txn_summary_model.dart';
 import 'package:swastik_mobile_app/core/utils/responsive_utils.dart';
 import 'package:swastik_mobile_app/core/utils/time_utils.dart';
 import 'package:swastik_mobile_app/core/utils/formatters.dart';
@@ -168,14 +169,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   Future<void> _handleRefresh() async {
     ref.invalidate(partiesStreamProvider);
-    // Summary cards are derived from the full transaction list, so refresh that
-    // too (not just the paginated table window) to pull the latest totals.
-    ref.invalidate(transactionsStreamProvider);
     try {
+      // Actually await the latest data so a pull-to-refresh reflects the newest
+      // entries and totals. The table window, the summary totals and the parties
+      // list are refreshed together; a generous cap still guarantees the spinner
+      // always dismisses even on a slow/failed network.
       await Future.wait([
         ref.read(homeTransactionsProvider.notifier).refresh(),
+        ref.read(transactionSummaryProvider.notifier).refresh(),
         ref.read(partiesStreamProvider.future),
-      ]).timeout(const Duration(milliseconds: 800));
+      ]).timeout(const Duration(seconds: 8));
     } catch (_) {
       // Gracefully handle timeout or network error to ensure spinner always dismisses
     }
@@ -327,45 +330,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     }).toList();
   }
 
-  /// Running balance for a summary card, computed from the full transaction
-  /// list. Kept byte-for-byte in step with the per-card statement screen
-  /// (statement_screen.dart) so the dashboard cards and the detail view can
-  /// never disagree:
-  ///   • cash    → non-metal transactions paid in cash
-  ///   • online  → non-metal transactions paid online / upi / rtgs
-  ///   • gold    → transactions with metalType == 'gold'
-  ///   • diamond → transactions with metalType == 'diamond'
-  /// Credits (receipt / metalIn) add, debits (payment / metalOut) subtract.
-  double _computeCategoryTotal(List<TransactionModel> txns, String category) {
-    double total = 0.0;
-    for (final t in txns) {
-      final bool matches;
-      if (category == 'cash') {
-        matches = t.metalType.isEmpty && t.paymentMode == PaymentMode.cash;
-      } else if (category == 'online') {
-        matches = t.metalType.isEmpty &&
-            (t.paymentMode == PaymentMode.online ||
-                t.paymentMode == PaymentMode.upi ||
-                t.paymentMode == PaymentMode.rtgs);
-      } else {
-        matches = t.metalType == category;
-      }
-      if (!matches) continue;
-
-      final isCredit =
-          t.type == TransactionType.receipt || t.type == TransactionType.metalIn;
-      final isDebit =
-          t.type == TransactionType.payment || t.type == TransactionType.metalOut;
-      final val = t.metalType.isEmpty ? t.cashAmount : t.metalWeight;
-      if (isCredit) {
-        total += val;
-      } else if (isDebit) {
-        total -= val;
-      }
-    }
-    return total;
-  }
-
   @override
   Widget build(BuildContext context) {
     final isTablet = AppResponsive.isTablet(context);
@@ -376,18 +340,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final txState = ref.watch(homeTransactionsProvider);
     final transactionsAsync = _asAsync(txState);
 
-    // Summary cards are computed live from the full transaction list — the same
-    // source and formula the per-card statement screen uses (see
-    // _computeCategoryTotal). This guarantees the cards always match the detail
-    // view and refresh immediately whenever an entry is added / edited / deleted,
-    // instead of trusting the server's precomputed daily-closing-balance row,
-    // which could lag behind or diverge from the live transactions.
-    final List<TransactionModel> allTxns =
-        ref.watch(transactionsStreamProvider).value ?? const <TransactionModel>[];
-    final double cashVal = _computeCategoryTotal(allTxns, 'cash');
-    final double onlineVal = _computeCategoryTotal(allTxns, 'online');
-    final double goldVal = _computeCategoryTotal(allTxns, 'gold');
-    final double diamondVal = _computeCategoryTotal(allTxns, 'diamond');
+    // Summary cards read the running totals from the server-side aggregation
+    // (`/transactions/summary`) instead of re-downloading the whole transactions
+    // collection to sum them on the device. The formula on the server mirrors
+    // _computeCategoryTotal exactly, and a mutation pushes an optimistic delta
+    // (see TransactionNotifier) so the cards update the instant an entry is saved.
+    final TxnSummary summary =
+        ref.watch(transactionSummaryProvider).value ?? TxnSummary.zero;
+    final double cashVal = summary.cash;
+    final double onlineVal = summary.online;
+    final double goldVal = summary.gold;
+    final double diamondVal = summary.diamond;
 
     final String displayCash =
         '₹ ${NumberFormat.decimalPattern('en_IN').format(cashVal)}';

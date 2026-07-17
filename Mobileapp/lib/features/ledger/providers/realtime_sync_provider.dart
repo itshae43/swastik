@@ -123,6 +123,11 @@ class RealtimeSyncNotifier extends Notifier<void> {
     ref.invalidate(transactionsStreamProvider);
     ref.invalidate(dailyBalancesStreamProvider);
     ref.invalidate(partiesStreamProvider);
+    // Home's table + summary totals are in-place providers (not invalidated, to
+    // preserve filter/paging and avoid flicker) — refresh them so a transaction
+    // made on another device shows up on this device's home immediately.
+    ref.read(homeTransactionsProvider.notifier).refresh();
+    ref.read(transactionSummaryProvider.notifier).refresh();
   }
 }
 
